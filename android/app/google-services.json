@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "316425031253",
+    "project_id": "school-manager-2026",
+    "storage_bucket": "school-manager-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:316425031253:android:044406b6f8af659ea08edc",
+        "android_client_info": {
+          "package_name": "com.example.ecole_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "316425031253-ubs1n9huo10uqqvqiddla3m97rkfjuie.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5Soj1isTC_rjXViSeswTTRfGKLeQIdi4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "316425031253-ubs1n9huo10uqqvqiddla3m97rkfjuie.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "316425031253-okcgbe103sgnpoc6qojh4cm0ir6fc6a9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ecoleApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
