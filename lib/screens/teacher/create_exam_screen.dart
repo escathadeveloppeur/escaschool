@@ -32,45 +32,91 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   int duration = 60;
   int totalPoints = 0;
   List<Map<String, dynamic>> questions = [];
-  List<Map<String, dynamic>> classes = [];
+  List<Map<String, dynamic>> availableClasses = [];   // Classes où le prof enseigne
+  List<Map<String, dynamic>> availableSubjectsForClass = []; // Matières du prof dans la classe sélectionnée
   bool _isLoading = true;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadClassesFromFirestore();
+    _loadProfessorClasses();
   }
 
-  /// 🔥 Charger les classes depuis Firestore
-  Future<void> _loadClassesFromFirestore() async {
+  /// 🔥 Charger les classes où le professeur enseigne
+  Future<void> _loadProfessorClasses() async {
     setState(() => _isLoading = true);
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      Query query = FirebaseFirestore.instance.collection('classes');
-      if (schoolId != null && !auth.isSuperAdmin) {
-        query = query.where('schoolId', isEqualTo: schoolId);
-      }
+      // Récupérer toutes les classes
+      final classesSnapshot = await FirebaseFirestore.instance
+          .collection('classes')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
       
-      final snapshot = await query.get();
+      availableClasses = [];
       
-      classes = [];
-      for (var doc in snapshot.docs) {
+      for (var doc in classesSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        classes.add({
-          'firestoreId': doc.id,
-          'className': data['className'] ?? '',
-          'level': data['level'] ?? '',
+        final subjects = List<Map<String, dynamic>>.from(data['subjects'] ?? []);
+        
+        // Vérifier si le professeur enseigne dans cette classe
+        final hasProfessorSubjects = subjects.any((subject) {
+          return subject['professorFirestoreId'] == widget.professorFirestoreId;
         });
+        
+        if (hasProfessorSubjects) {
+          availableClasses.add({
+            'firestoreId': doc.id,
+            'className': data['className'] ?? '',
+            'level': data['level'] ?? '',
+            'section': data['section'] ?? '',
+            'cycleType': data['cycleType'] ?? 'primaire',
+            'subjects': subjects, // Garder toutes les matières pour filtrer plus tard
+          });
+        }
       }
+      
+      print('✅ Classes disponibles: ${availableClasses.length}');
+      
+      if (availableClasses.isEmpty) {
+        _showSnackBar('Vous n\'êtes assigné à aucune classe', const Color(0xFFF59E0B));
+      }
+      
+      setState(() {});
     } catch (e) {
       print('❌ Erreur chargement classes: $e');
       _showSnackBar('Erreur de chargement', const Color(0xFFEF4444));
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  /// 🔥 Charger les matières du professeur pour la classe sélectionnée
+  void _loadSubjectsForClass(String classId) {
+    final selectedClassData = availableClasses.firstWhere(
+      (c) => c['firestoreId'] == classId,
+      orElse: () => {},
+    );
+    
+    if (selectedClassData.isNotEmpty) {
+      final subjects = List<Map<String, dynamic>>.from(selectedClassData['subjects'] ?? []);
+      
+      // Filtrer les matières enseignées par ce professeur
+      availableSubjectsForClass = subjects.where((subject) {
+        return subject['professorFirestoreId'] == widget.professorFirestoreId;
+      }).toList();
+      
+      print('✅ Matières disponibles dans cette classe: ${availableSubjectsForClass.length}');
+    } else {
+      availableSubjectsForClass = [];
+    }
+    
+    // Réinitialiser la matière sélectionnée
+    subject = '';
+    setState(() {});
   }
 
   void _showSnackBar(String message, Color color) {
@@ -144,7 +190,6 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
     );
   }
 
-  /// 🔥 Sauvegarder l'examen dans Firestore
   Future<void> _saveExam() async {
     if (!_formKey.currentState!.validate()) return;
     if (questions.isEmpty) {
@@ -210,7 +255,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadClassesFromFirestore,
+            onPressed: _loadProfessorClasses,
             tooltip: 'Actualiser',
           ),
         ],
@@ -296,41 +341,99 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                             
                             const SizedBox(height: 12),
                             
-                            TextFormField(
-                              decoration: const InputDecoration(
-                                labelText: 'Matière *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.book),
+                            // 🔥 DROPDOWN CLASSE (uniquement celles où le prof enseigne)
+                            if (availableClasses.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.warning, color: Colors.orange),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Vous n\'êtes assigné à aucune classe. Contactez l\'administration.',
+                                        style: TextStyle(color: Colors.orange),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              DropdownButtonFormField<String>(
+                                decoration: const InputDecoration(
+                                  labelText: 'Classe *',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.class_),
+                                ),
+                                items: availableClasses.map<DropdownMenuItem<String>>((c) {
+                                  final sectionDisplay = c['section'] != null && c['section'].isNotEmpty
+                                      ? ' - ${c['section']}'
+                                      : '';
+                                  return DropdownMenuItem<String>(
+                                    value: c['firestoreId'],
+                                    child: Text('${c['className']}${sectionDisplay} (${c['level']})'),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setState(() {
+                                    classFirestoreId = value!;
+                                    final selectedClass = availableClasses.firstWhere(
+                                      (c) => c['firestoreId'] == value,
+                                    );
+                                    className = selectedClass['className'];
+                                    _loadSubjectsForClass(value);
+                                  });
+                                },
+                                validator: (v) => v == null ? 'Veuillez sélectionner une classe' : null,
                               ),
-                              onChanged: (v) => subject = v,
-                              validator: (v) => v!.isEmpty ? 'Matière requise' : null,
-                            ),
                             
                             const SizedBox(height: 12),
                             
-                            DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                labelText: 'Classe *',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.class_),
-                              ),
-                            items: classes.map<DropdownMenuItem<String>>((c) {
-  return DropdownMenuItem<String>(
-    value: c['className'] as String,
-    child: Text('${c['className']} (${c['level']})'),
-  );
-}).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  className = value!;
-                                  final selectedClass = classes.firstWhere(
-                                    (c) => c['className'] == value,
+                            // 🔥 DROPDOWN MATIÈRE (uniquement celles du prof dans cette classe)
+                            if (classFirestoreId.isNotEmpty && availableSubjectsForClass.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.warning, color: Colors.orange),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Vous n\'avez aucune matière dans cette classe',
+                                        style: TextStyle(color: Colors.orange),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (classFirestoreId.isNotEmpty)
+                              DropdownButtonFormField<String>(
+                                decoration: const InputDecoration(
+                                  labelText: 'Matière *',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.book),
+                                ),
+                                items: availableSubjectsForClass.map<DropdownMenuItem<String>>((s) {
+                                  return DropdownMenuItem<String>(
+                                    value: s['name'],
+                                    child: Text(s['name']),
                                   );
-                                  classFirestoreId = selectedClass['firestoreId'];
-                                });
-                              },
-                              validator: (v) => v == null ? 'Classe requise' : null,
-                            ),
+                                }).toList(),
+                                onChanged: (value) {
+                                  setState(() {
+                                    subject = value!;
+                                  });
+                                },
+                                validator: (v) => v == null ? 'Veuillez sélectionner une matière' : null,
+                              ),
                           ],
                         ),
                       ),
@@ -617,7 +720,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   }
 }
 
-// Dialog pour ajouter/modifier une question
+// Dialog pour ajouter/modifier une question (inchangé)
 class AddQuestionDialog extends StatefulWidget {
   final Map<String, dynamic>? initialQuestion;
   final bool isEditing;

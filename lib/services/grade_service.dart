@@ -24,7 +24,7 @@ class GradeService {
         'evaluationType': grade.evaluationType,
         'score': grade.score,
         'maxScore': grade.maxScore,
-        'date': grade.date.toIso8601String(),
+        'date': Timestamp.fromDate(grade.date), // 🔥 CORRECTION: Utiliser Timestamp
         'coefficient': grade.coefficient,
         'comments': grade.comments,
         'schoolId': schoolId,
@@ -77,6 +77,16 @@ class GradeService {
       for (var doc in snapshot.docs) {
         final data = doc.data();
         
+        // 🔥 CORRECTION: Gérer correctement la date (Timestamp ou String)
+        DateTime date;
+        if (data['date'] is Timestamp) {
+          date = (data['date'] as Timestamp).toDate();
+        } else if (data['date'] is String) {
+          date = DateTime.parse(data['date']);
+        } else {
+          date = DateTime.now();
+        }
+        
         final grade = GradeModel(
           studentKeyHive: data['studentKeyHive'] ?? 0,
           studentName: data['studentName'] ?? '',
@@ -85,9 +95,9 @@ class GradeService {
           evaluationType: data['evaluationType'] ?? 'Devoir',
           score: (data['score'] ?? 0).toDouble(),
           maxScore: (data['maxScore'] ?? 20).toDouble(),
-          date: data['date'] != null ? DateTime.parse(data['date']) : DateTime.now(),
+          date: date,
           coefficient: (data['coefficient'] ?? 1).toDouble(),
-          comments: data['comments'],
+          comments: data['comments'] ?? '',
         );
         
         final existing = await _dbHelper.getGradeByKey(data['localKey']);

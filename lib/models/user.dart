@@ -10,10 +10,14 @@ class User {
   final String email;
   final String role;
   final String password;
-  final int? schoolId;
+  final String? schoolId;
+  final String? schoolName;  // ✅ AJOUTÉ
   final String? firebaseUid;
   final DateTime? createdAt;
   final DateTime? lastLogin;
+  final bool? isActive;  // ✅ AJOUTÉ
+  final String? phone;    // ✅ AJOUTÉ
+  final String? position; // ✅ AJOUTÉ
 
   User({
     required this.id,
@@ -23,9 +27,13 @@ class User {
     required this.role,
     required this.password,
     this.schoolId,
+    this.schoolName,  // ✅ AJOUTÉ
     this.firebaseUid,
     this.createdAt,
     this.lastLogin,
+    this.isActive,
+    this.phone,
+    this.position,
   });
 
   // ================= CONVERSION POUR HIVE (LOCAL) =================
@@ -39,9 +47,13 @@ class User {
       'role': role,
       'password': password,
       'schoolId': schoolId,
+      'schoolName': schoolName,  // ✅ AJOUTÉ
       'firebaseUid': firebaseUid,
       'createdAt': createdAt?.toIso8601String(),
       'lastLogin': lastLogin?.toIso8601String(),
+      'isActive': isActive,
+      'phone': phone,
+      'position': position,
     };
   }
 
@@ -53,7 +65,8 @@ class User {
       email: m['email'] as String? ?? '',
       role: m['role'] as String? ?? 'student',
       password: m['password'] as String? ?? '',
-      schoolId: m['schoolId'] as int?,
+      schoolId: m['schoolId'] as String?,
+      schoolName: m['schoolName'] as String?,  // ✅ AJOUTÉ
       firebaseUid: m['firebaseUid'] as String?,
       createdAt: m['createdAt'] != null 
           ? DateTime.tryParse(m['createdAt']) 
@@ -61,6 +74,9 @@ class User {
       lastLogin: m['lastLogin'] != null 
           ? DateTime.tryParse(m['lastLogin']) 
           : null,
+      isActive: m['isActive'] as bool? ?? true,
+      phone: m['phone'] as String?,
+      position: m['position'] as String?,
     );
   }
 
@@ -74,7 +90,11 @@ class User {
       'email': email,
       'role': role,
       'schoolId': schoolId,
+      'schoolName': schoolName,  // ✅ AJOUTÉ
       'firebaseUid': firebaseUid,
+      'phone': phone,
+      'position': position,
+      'isActive': isActive ?? true,
       'createdAt': createdAt != null 
           ? Timestamp.fromDate(createdAt!) 
           : FieldValue.serverTimestamp(),
@@ -95,10 +115,14 @@ class User {
       email: data['email'] as String? ?? '',
       role: data['role'] as String? ?? 'student',
       password: '',
-      schoolId: data['schoolId'] as int?,
+      schoolId: data['schoolId'] as String?,
+      schoolName: data['schoolName'] as String?,  // ✅ AJOUTÉ
       firebaseUid: doc.id,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       lastLogin: (data['lastLogin'] as Timestamp?)?.toDate(),
+      isActive: data['isActive'] as bool? ?? true,
+      phone: data['phone'] as String?,
+      position: data['position'] as String?,
     );
   }
 
@@ -112,10 +136,14 @@ class User {
     String? email,
     String? role,
     String? password,
-    int? schoolId,
+    String? schoolId,
+    String? schoolName,  // ✅ AJOUTÉ
     String? firebaseUid,
     DateTime? createdAt,
     DateTime? lastLogin,
+    bool? isActive,
+    String? phone,
+    String? position,
   }) {
     return User(
       id: id ?? this.id,
@@ -125,9 +153,13 @@ class User {
       role: role ?? this.role,
       password: password ?? this.password,
       schoolId: schoolId ?? this.schoolId,
+      schoolName: schoolName ?? this.schoolName,  // ✅ AJOUTÉ
       firebaseUid: firebaseUid ?? this.firebaseUid,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
+      isActive: isActive ?? this.isActive,
+      phone: phone ?? this.phone,
+      position: position ?? this.position,
     );
   }
 
@@ -143,9 +175,10 @@ class User {
   bool get isTeacher => role == 'teacher';
   bool get isStudent => role == 'student';
   bool get isParent => role == 'parent';
-  bool get isStaff => role == 'staff' || isTeacher || isSchoolAdmin;
+  bool get isStaff => role == 'staff';
   bool get hasSchool => schoolId != null;
   bool get hasFirebaseAccount => firebaseUid != null && firebaseUid!.isNotEmpty;
+  bool get isActiveAccount => isActive ?? true;
   
   // ================= TEXTE DES RÔLES =================
   
@@ -231,7 +264,7 @@ class User {
   
   @override
   String toString() {
-    return 'User(id: $id, firestoreId: $firestoreId, name: $name, email: $email, role: $role, schoolId: $schoolId, hasFirebase: $hasFirebaseAccount)';
+    return 'User(id: $id, firestoreId: $firestoreId, name: $name, email: $email, role: $role, schoolId: $schoolId, schoolName: $schoolName, hasFirebase: $hasFirebaseAccount)';
   }
   
   @override
@@ -241,5 +274,5 @@ class User {
   }
   
   @override
-  int get hashCode => id.hashCode;  // ← CORRIGÉ : getter au lieu de méthode
+  int get hashCode => id.hashCode;  // ✅ CORRIGÉ
 }

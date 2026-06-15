@@ -1,4 +1,5 @@
 // lib/screens/teacher/teacher_students_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -35,39 +36,42 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
     print('\n========== TEACHER STUDENTS SCREEN ==========');
     print('📚 Classes assignées: ${widget.assignedClasses}');
     
-    // Initialiser selectedClass uniquement si des classes sont disponibles
     if (widget.assignedClasses.isNotEmpty) {
       selectedClass = widget.assignedClasses.first;
       print('✅ Classe sélectionnée par défaut: $selectedClass');
     } else {
       selectedClass = '';
-      print('⚠️ Aucune classe assignée, sélection vide');
+      print('⚠️ Aucune classe assignée');
     }
     
     _loadStudentsFromFirestore();
   }
   
-  /// 🔥 Charger les étudiants depuis Firestore
+  /// 🔥 Charger les étudiants depuis Firestore (uniquement classes assignées)
   Future<void> _loadStudentsFromFirestore() async {
     setState(() => loading = true);
     
-    print('\n🔍 [1/2] Chargement des étudiants depuis Firestore...');
+    print('\n🔍 Chargement des étudiants depuis Firestore...');
     
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      print('   → School ID: $schoolId');
-      print('   → Super Admin: ${auth.isSuperAdmin}');
-      print('   → Classes autorisées: ${widget.assignedClasses}');
-      
-      Query query = FirebaseFirestore.instance.collection('students');
-      if (schoolId != null && !auth.isSuperAdmin) {
-        query = query.where('schoolId', isEqualTo: schoolId);
-        print('   → Filtre appliqué: schoolId == $schoolId');
+      if (widget.assignedClasses.isEmpty) {
+        print('⚠️ Aucune classe assignée, liste vide');
+        setState(() {
+          students = [];
+          filteredStudents = [];
+        });
+        return;
       }
       
-      final snapshot = await query.get();
+      // 🔥 REQUÊTE UNIQUE : filtrer par les classes assignées
+      final snapshot = await FirebaseFirestore.instance
+          .collection('students')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+      
       print('   → Total étudiants dans Firestore: ${snapshot.docs.length}');
       
       final List<Map<String, dynamic>> allStudents = snapshot.docs.map((doc) {
@@ -88,23 +92,17 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
         };
       }).toList();
       
-      print('\n🔍 [2/2] Filtrage par classes assignées...');
-      
-      // Filtrer les étudiants par classes assignées
+      // 🔥 FILTRER PAR CLASSES ASSIGNÉES UNIQUEMENT
       setState(() {
         students = allStudents.where((s) {
           final className = s['className'] ?? '';
-          final isAssigned = widget.assignedClasses.contains(className);
-          if (isAssigned) {
-            print('   ✅ Étudiant ${s['fullName']} - Classe: $className');
-          }
-          return isAssigned;
+          return widget.assignedClasses.contains(className);
         }).toList();
         filteredStudents = List.from(students);
       });
       
-      print('\n📊 RÉSULTAT: ${students.length} étudiant(s) trouvé(s)');
-      print('   Classes: ${widget.assignedClasses}');
+      print('\n📊 RÉSULTAT: ${students.length} étudiant(s) dans les classes assignées');
+      print('   Classes autorisées: ${widget.assignedClasses}');
       print('=========================================\n');
       
     } catch (e) {
@@ -128,19 +126,14 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
   }
   
   void _filterStudents() {
-    print('🔍 Filtrage des étudiants: classe="$selectedClass", recherche="$searchQuery"');
-    
     setState(() {
       filteredStudents = students.where((s) {
         final matchesClass = selectedClass.isEmpty || s['className'] == selectedClass;
         final matchesSearch = searchQuery.isEmpty ||
-            (s['fullName'] as String).toLowerCase().contains(searchQuery.toLowerCase()) ||
-            (s['className'] as String).toLowerCase().contains(searchQuery.toLowerCase());
+            (s['fullName'] as String).toLowerCase().contains(searchQuery.toLowerCase());
         return matchesClass && matchesSearch;
       }).toList();
     });
-    
-    print('   → Résultat: ${filteredStudents.length} étudiant(s)');
   }
   
   Future<void> _generateStudentsListPDF() async {
@@ -200,16 +193,11 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
   }
   
   Future<void> _viewStudentDetails(Map<String, dynamic> student) async {
-    print('🔍 Affichage détails pour: ${student['fullName']}');
-    
     try {
-      // Charger les notes depuis Firestore
       final gradesSnapshot = await FirebaseFirestore.instance
           .collection('grades')
           .where('studentName', isEqualTo: student['fullName'])
           .get();
-      
-      print('   → ${gradesSnapshot.docs.length} note(s) trouvée(s)');
       
       final grades = gradesSnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -522,26 +510,15 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
       appBar: AppBar(
         title: const Text(
           'Mes élèves',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
         ),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.grey[800],
         elevation: 0,
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _loadStudentsFromFirestore,
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.grey[100],
-              ),
-              tooltip: 'Actualiser',
-            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadStudentsFromFirestore,
+            tooltip: 'Actualiser',
           ),
         ],
       ),
@@ -563,11 +540,7 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
                     const SizedBox(width: 8),
                     Text(
                       'École : ${auth.schoolName ?? auth.currentSchoolId}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF3B82F6),
-                      ),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
                     ),
                   ],
                 ),
@@ -599,7 +572,7 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
                                 value: '',
                                 child: Text('Toutes les classes'),
                               ),
-                              ...widget.assignedClasses.map((classe) {
+                              ...widget.assignedClasses.map<DropdownMenuItem<String>>((classe) {
                                 return DropdownMenuItem<String>(
                                   value: classe,
                                   child: Text(classe),
@@ -657,7 +630,6 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
             
             const SizedBox(height: 20),
             
-            // Message si aucune classe assignée
             if (widget.assignedClasses.isEmpty)
               Center(
                 child: Column(
@@ -697,7 +669,7 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
                                 Text(
                                   searchQuery.isNotEmpty 
                                       ? "Aucun résultat pour '$searchQuery'"
-                                      : "Aucun élève dans cette classe",
+                                      : "Aucun élève dans les classes assignées",
                                   style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                                 ),
                               ],

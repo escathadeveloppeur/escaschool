@@ -27,7 +27,7 @@ class StaffModelAdapter extends TypeAdapter<StaffModel> {
       salary: fields[7] as double,
       photoUrl: fields[8] as String?,
       isActive: fields[9] as bool,
-      schoolId: fields[10] as int?,
+      schoolId: fields[10] as String?,
       firestoreId: fields[11] as String?,
       createdAt: fields[12] as DateTime?,
       updatedAt: fields[13] as DateTime?,

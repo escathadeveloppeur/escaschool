@@ -37,7 +37,8 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
   String classFirestoreId = '';
   List<Map<String, dynamic>> chapters = [];
   List<Map<String, dynamic>> resources = [];
-  List<Map<String, dynamic>> classes = [];
+  List<Map<String, dynamic>> availableClasses = []; // 🔥 Classes où le prof enseigne
+  List<Map<String, dynamic>> availableSubjectsForClass = []; // 🔥 Matières du prof dans la classe
   bool _isLoading = true;
   bool _isSaving = false;
   late AnimationController _animationController;
@@ -49,7 +50,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _loadClassesFromFirestore();
+    _loadProfessorClasses();
     
     if (widget.courseToEdit != null) {
       final course = widget.courseToEdit!;
@@ -81,28 +82,45 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
     );
   }
 
-  /// 🔥 Charger les classes depuis Firestore
-  Future<void> _loadClassesFromFirestore() async {
+  /// 🔥 Charger les classes où le professeur enseigne
+  Future<void> _loadProfessorClasses() async {
     setState(() => _isLoading = true);
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      Query query = FirebaseFirestore.instance.collection('classes');
-      if (schoolId != null && !auth.isSuperAdmin) {
-        query = query.where('schoolId', isEqualTo: schoolId);
+      // Récupérer toutes les classes
+      final classesSnapshot = await FirebaseFirestore.instance
+          .collection('classes')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+      
+      availableClasses = [];
+      
+      for (var doc in classesSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final subjects = List<Map<String, dynamic>>.from(data['subjects'] ?? []);
+        
+        // Vérifier si le professeur enseigne dans cette classe
+        final hasProfessorSubjects = subjects.any((subject) {
+          return subject['professorFirestoreId'] == widget.professorFirestoreId;
+        });
+        
+        if (hasProfessorSubjects) {
+          availableClasses.add({
+            'firestoreId': doc.id,
+            'className': data['className'] ?? '',
+            'level': data['level'] ?? '',
+            'section': data['section'] ?? '',
+            'cycleType': data['cycleType'] ?? 'primaire',
+            'subjects': subjects, // Garder toutes les matières pour filtrer plus tard
+          });
+        }
       }
       
-      final snapshot = await query.get();
-      
-      classes = [];
-      for (var doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        classes.add({
-          'firestoreId': doc.id,
-          'className': data['className'] ?? '',
-          'level': data['level'] ?? '',
-        });
+      // Si en mode édition, sélectionner la classe et charger ses matières
+      if (widget.courseToEdit != null && classFirestoreId.isNotEmpty) {
+        _loadSubjectsForClass(classFirestoreId);
       }
       
       _animationController.forward(from: 0);
@@ -112,6 +130,29 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  /// 🔥 Charger les matières du professeur pour la classe sélectionnée
+  void _loadSubjectsForClass(String classId) {
+    final selectedClassData = availableClasses.firstWhere(
+      (c) => c['firestoreId'] == classId,
+      orElse: () => {},
+    );
+    
+    if (selectedClassData.isNotEmpty) {
+      final subjects = List<Map<String, dynamic>>.from(selectedClassData['subjects'] ?? []);
+      
+      // Filtrer les matières enseignées par ce professeur
+      availableSubjectsForClass = subjects.where((subject) {
+        return subject['professorFirestoreId'] == widget.professorFirestoreId;
+      }).toList();
+      
+      print('✅ Matières disponibles dans cette classe: ${availableSubjectsForClass.length}');
+    } else {
+      availableSubjectsForClass = [];
+    }
+    
+    setState(() {});
   }
 
   void _addChapter() {
@@ -277,7 +318,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadClassesFromFirestore,
+            onPressed: _loadProfessorClasses,
             style: IconButton.styleFrom(backgroundColor: Colors.grey[100]),
           ),
         ],
@@ -338,12 +379,117 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
             const SizedBox(height: 16),
             _buildTextField('Description', 'Décrivez le contenu du cours...', Icons.description, description, (v) => description = v, maxLines: 3),
             const SizedBox(height: 16),
-            _buildTextField('Matière', 'Ex: Mathématiques, Physique...', Icons.book, subject, (v) => subject = v, validator: true),
-            const SizedBox(height: 16),
-            _buildClassDropdown(),
+            _buildClassAndSubjectSelector(),
           ],
         ),
       ),
+    );
+  }
+
+  /// 🔥 Sélecteur de classe et matière (dépendants)
+  Widget _buildClassAndSubjectSelector() {
+    return Column(
+      children: [
+        // Sélecteur de classe
+        if (availableClasses.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Vous n\'êtes assigné à aucune classe. Contactez l\'administration.',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          DropdownButtonFormField<String>(
+            value: classFirestoreId.isNotEmpty ? classFirestoreId : null,
+            decoration: InputDecoration(
+              labelText: 'Classe *',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              prefixIcon: const Icon(Icons.class_, color: Color(0xFF10B981)),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            items: availableClasses.map<DropdownMenuItem<String>>((c) {
+              final sectionDisplay = c['section'] != null && c['section'].isNotEmpty
+                  ? ' - ${c['section']}'
+                  : '';
+              return DropdownMenuItem<String>(
+                value: c['firestoreId'],
+                child: Text('${c['className']}${sectionDisplay} (${c['level']})'),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                classFirestoreId = value!;
+                final selectedClass = availableClasses.firstWhere(
+                  (c) => c['firestoreId'] == value,
+                );
+                className = selectedClass['className'];
+                _loadSubjectsForClass(value);
+              });
+            },
+            validator: (v) => v == null ? 'Veuillez sélectionner une classe' : null,
+          ),
+        
+        const SizedBox(height: 16),
+        
+        // Sélecteur de matière (chargé après la sélection de la classe)
+        if (classFirestoreId.isNotEmpty && availableSubjectsForClass.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Vous n\'avez aucune matière dans cette classe',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (classFirestoreId.isNotEmpty)
+          DropdownButtonFormField<String>(
+            value: subject.isNotEmpty ? subject : null,
+            decoration: InputDecoration(
+              labelText: 'Matière *',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              prefixIcon: const Icon(Icons.book, color: Color(0xFF10B981)),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            items: availableSubjectsForClass.map<DropdownMenuItem<String>>((s) {
+              return DropdownMenuItem<String>(
+                value: s['name'],
+                child: Text(s['name']),
+              );
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                subject = value!;
+              });
+            },
+            validator: (v) => v == null ? 'Veuillez sélectionner une matière' : null,
+          ),
+      ],
     );
   }
 
@@ -458,34 +604,6 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> with SingleTick
     );
   }
 
-  Widget _buildClassDropdown() {
-    return DropdownButtonFormField<String>(
-      value: className.isNotEmpty ? className : null,
-      decoration: InputDecoration(
-        labelText: 'Classe',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        prefixIcon: const Icon(Icons.class_, color: Color(0xFF10B981)),
-        filled: true,
-        fillColor: Colors.white,
-      ),
-items: classes.map<DropdownMenuItem<String>>((c) {
-  return DropdownMenuItem<String>(
-    value: c['className'] as String,
-    child: Text('${c['className']} (${c['level']})'),
-  );
-}).toList(),      onChanged: (value) {
-        if (value != null) {
-          setState(() {
-            className = value;
-            final selectedClass = classes.firstWhere((c) => c['className'] == value);
-            classFirestoreId = selectedClass['firestoreId'];
-          });
-        }
-      },
-      validator: (v) => v == null ? 'Classe requise' : null,
-    );
-  }
-
   Widget _buildChapterItem(int index) {
     final chapter = chapters[index];
     return Container(
@@ -564,7 +682,7 @@ items: classes.map<DropdownMenuItem<String>>((c) {
   };
 }
 
-// Dialog pour ajouter/modifier un chapitre
+// Dialog pour ajouter/modifier un chapitre (inchangé)
 class AddChapterDialog extends StatefulWidget {
   final String? title;
   final String? content;
@@ -702,7 +820,7 @@ void dispose() {
   }
 }
 
-// BottomSheet pour ajouter/modifier une ressource avec upload Google Drive
+// BottomSheet pour ajouter/modifier une ressource (inchangé)
 class AddResourceBottomSheet extends StatefulWidget {
   final String? title;
   final String? description;

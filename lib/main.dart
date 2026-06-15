@@ -8,7 +8,8 @@ import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'models/university/etablissement_model.dart';
 import 'services/notification_service.dart';
-import 'services/notification_trigger.dart';  // ← AJOUTÉ
+import 'services/notification_trigger.dart';
+import 'services/migration_service.dart';
 
 // Import des écrans existants
 import 'screens/login_screen.dart';
@@ -19,6 +20,8 @@ import 'screens/admin/add_announcement.dart';
 import 'screens/admin/admin_professors.dart';
 import 'screens/admin/admin_schedule.dart';
 import 'screens/admin/professor_permissions.dart';
+import 'screens/admin/add_class_screen.dart';
+import 'screens/admin/manage_sections_screen.dart';  // ✅ NOUVEAU
 import 'screens/staff/add_document.dart';
 import 'screens/staff/add_payment.dart';
 import 'screens/staff/add_student.dart';
@@ -171,6 +174,29 @@ Future<void> _syncSchoolsFromFirestore() async {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MIGRATION AUTOMATIQUE DES ÉTUDIANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+Future<void> _runAutomaticMigration() async {
+  print('\n🔄 Vérification de la migration des étudiants...');
+  
+  try {
+    final migrationService = MigrationService();
+    final result = await migrationService.runOnce();
+    
+    if (result['migrated'] > 0) {
+      print('✅ Migration automatique: ${result['migrated']} étudiants migrés');
+    } else if (result['success']) {
+      print('✅ Aucune migration nécessaire');
+    } else {
+      print('⚠️ Migration: ${result['message']}');
+    }
+  } catch (e) {
+    print('❌ Erreur lors de la migration automatique: $e');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // GESTION DES MESSAGES FCM (Notifications)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -201,7 +227,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void _handleNotificationTap(Map<String, dynamic> data) {
   final type = data['type'];
   print('🔍 Navigation depuis notification: type=$type');
-  // La navigation réelle se fera via un GlobalKey ou un service de navigation
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -247,7 +272,12 @@ void main() async {
     await _createDefaultSuperAdmin();
     await _syncSchoolsFromFirestore();
     
-    // 🔥 AJOUT CRUCIAL : Démarrer les écouteurs de notifications 🔥
+    // 🔥 MIGRATION AUTOMATIQUE DES ÉTUDIANTS 🔥
+    print("\n  → Migration automatique des étudiants...");
+    await _runAutomaticMigration();
+    print("  ✓ Migration des étudiants vérifiée");
+    
+    // 🔥 Démarrer les écouteurs de notifications
     print("\n  → Démarrage des écouteurs de notifications automatiques...");
     NotificationTrigger().startAllListeners();
     print("  ✓ Écouteurs de notifications actifs");
@@ -286,7 +316,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Ecole App',
+      title: 'EscaSchool',
       debugShowCheckedModeBanner: false,
       
       initialRoute: '/',
@@ -310,6 +340,8 @@ class MyApp extends StatelessWidget {
         '/school_payments': (context) => const SchoolPaymentsScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/secret/admin': (context) => const AdminCreatorScreen(),
+        '/add_class': (context) => const AddClassScreen(),  // ✅ NOUVEAU
+        '/manage_sections': (context) => const ManageSectionsScreen(),  // ✅ NOUVEAU
       },
       
       onGenerateRoute: (settings) {
@@ -329,6 +361,7 @@ class MyApp extends StatelessWidget {
               builder: (context) => TeacherScheduleScreen(
                 teacherName: args?['teacherName'] ?? "Professeur",
                 professorFirestoreId: args?['professorFirestoreId'] ?? '',
+                assignedClasses: args?['assignedClasses'] ?? [],
               ),
             );
 
@@ -391,6 +424,7 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
               builder: (context) => TeacherReportsScreen(
                 teacherName: args?['teacherName'] ?? "Professeur",
+                professorFirestoreId: args?['professorFirestoreId'] ?? "",
                 assignedClasses: args?['assignedClasses'] ?? [],
                 assignedSubjects: args?['assignedSubjects'] ?? [],
               ),

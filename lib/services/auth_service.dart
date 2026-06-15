@@ -26,7 +26,7 @@ class AuthService {
           email: userMap['email'] as String? ?? '',
           role: userMap['role'] as String? ?? 'student',
           password: dbPassword,
-          schoolId: userMap['schoolId'] as int?,
+          schoolId: userMap['schoolId'] as String?,
         );
       }
       return null;
@@ -91,7 +91,7 @@ class AuthService {
         email: userMap['email'] as String? ?? '',
         role: userMap['role'] as String? ?? 'student',
         password: userMap['password'] as String? ?? '',
-        schoolId: userMap['schoolId'] as int?,
+        schoolId: userMap['schoolId'] as String?,
       );
     } catch (e) {
       print('Erreur getUserById: $e');
@@ -111,7 +111,7 @@ class AuthService {
         email: userMap['email'] as String? ?? '',
         role: userMap['role'] as String? ?? 'student',
         password: userMap['password'] as String? ?? '',
-        schoolId: userMap['schoolId'] as int?,
+        schoolId: userMap['schoolId'] as String?,
       )).toList();
     } catch (e) {
       print('Erreur getUsersBySchool: $e');
@@ -131,7 +131,7 @@ class AuthService {
         email: userMap['email'] as String? ?? '',
         role: userMap['role'] as String? ?? 'student',
         password: userMap['password'] as String? ?? '',
-        schoolId: userMap['schoolId'] as int?,
+        schoolId: userMap['schoolId'] as String?,
       )).toList();
     } catch (e) {
       print('Erreur getUsersByRole: $e');

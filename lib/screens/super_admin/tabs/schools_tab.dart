@@ -54,6 +54,22 @@ class _SchoolsTabState extends State<SchoolsTab> {
           firestoreId: doc.id,
           isActive: data['isActive'] ?? true,
           schoolCode: data['schoolCode'] ?? '',
+          // NOUVEAUX CHAMPS
+          pays: data['pays'],
+          province: data['province'],
+          ville: data['ville'],
+          commune: data['commune'],
+          codePostal: data['codePostal'],
+          statut: data['statut'],
+          directeurNom: data['directeurNom'],
+          directeurEmail: data['directeurEmail'],
+          directeurTelephone: data['directeurTelephone'],
+          anneeCreation: data['anneeCreation'],
+          capacite: data['capacite'],
+          langueEnseignement: data['langueEnseignement'],
+          logoUrl: data['logoUrl'],
+          signaturePrefet: data['signaturePrefet'],
+          signatureChef: data['signatureChef'],
         );
       }).toList();
       
@@ -164,7 +180,9 @@ class _SchoolsTabState extends State<SchoolsTab> {
         _filteredEtablissements = _etablissements.where((e) => 
           e.nom.toLowerCase().contains(query.toLowerCase()) ||
           (e.type?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
-          (e.schoolCode?.toLowerCase().contains(query.toLowerCase()) ?? false)
+          (e.schoolCode?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
+          (e.ville?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
+          (e.pays?.toLowerCase().contains(query.toLowerCase()) ?? false)
         ).toList();
       }
     });
@@ -204,8 +222,8 @@ class _SchoolsTabState extends State<SchoolsTab> {
           };
           
           return DraggableScrollableSheet(
-            initialChildSize: 0.75,
-            minChildSize: 0.5,
+            initialChildSize: 0.85,
+            minChildSize: 0.6,
             maxChildSize: 0.95,
             expand: false,
             builder: (context, scrollController) => Container(
@@ -239,9 +257,14 @@ class _SchoolsTabState extends State<SchoolsTab> {
                             ),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: const Center(
-                            child: Icon(Icons.business, size: 30, color: Colors.white),
-                          ),
+                          child: school.logoUrl != null && school.logoUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.network(school.logoUrl!, fit: BoxFit.cover),
+                                )
+                              : const Center(
+                                  child: Icon(Icons.business, size: 30, color: Colors.white),
+                                ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -265,21 +288,21 @@ class _SchoolsTabState extends State<SchoolsTab> {
                               Wrap(
                                 spacing: 8,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      'Firestore ID: ${school.firestoreId}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue,
-                                        fontFamily: 'monospace',
+                                  if (school.statut != null && school.statut!.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        school.statut!,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.orange,
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   if (school.schoolCode != null && school.schoolCode!.isNotEmpty)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -332,10 +355,10 @@ class _SchoolsTabState extends State<SchoolsTab> {
                     
                     const SizedBox(height: 24),
                     
-                    // Coordonnées
-                    if (school.adresse != null || school.telephone != null || school.email != null) ...[
+                    // Localisation
+                    if (school.pays != null || school.ville != null) ...[
                       const Text(
-                        'Coordonnées',
+                        'Localisation',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -343,16 +366,138 @@ class _SchoolsTabState extends State<SchoolsTab> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+                      _buildInfoCard(Icons.public, 'Pays', school.paysDisplay),
+                      if (school.province != null && school.province!.isNotEmpty)
+                        _buildInfoCard(Icons.map, 'Province/État', school.province!),
+                      if (school.ville != null && school.ville!.isNotEmpty)
+                        _buildInfoCard(Icons.location_city, 'Ville', school.ville!),
+                      if (school.commune != null && school.commune!.isNotEmpty)
+                        _buildInfoCard(Icons.grid_on, 'Commune', school.commune!),
+                      if (school.codePostal != null && school.codePostal!.isNotEmpty)
+                        _buildInfoCard(Icons.local_post_office, 'Code postal', school.codePostal!),
                       if (school.adresse != null && school.adresse!.isNotEmpty)
-                        _buildContactCard(Icons.location_on, 'Adresse', school.adresse!),
-                      if (school.telephone != null && school.telephone!.isNotEmpty)
-                        _buildContactCard(Icons.phone, 'Téléphone', school.telephone!),
-                      if (school.email != null && school.email!.isNotEmpty)
-                        _buildContactCard(Icons.email, 'Email', school.email!),
-                      if (school.siteWeb != null && school.siteWeb!.isNotEmpty)
-                        _buildContactCard(Icons.language, 'Site web', school.siteWeb!),
+                        _buildInfoCard(Icons.home, 'Adresse', school.adresse!),
                     ],
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Contact
+                    if (school.telephone != null || school.email != null) ...[
+                      const Text(
+                        'Contact',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (school.telephone != null && school.telephone!.isNotEmpty)
+                        _buildInfoCard(Icons.phone, 'Téléphone', school.telephone!),
+                      if (school.email != null && school.email!.isNotEmpty)
+                        _buildInfoCard(Icons.email, 'Email', school.email!),
+                      if (school.siteWeb != null && school.siteWeb!.isNotEmpty)
+                        _buildInfoCard(Icons.language, 'Site web', school.siteWeb!),
+                    ],
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Direction
+                    if (school.directeurNom != null || school.directeurEmail != null) ...[
+                      const Text(
+                        'Direction',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (school.directeurNom != null && school.directeurNom!.isNotEmpty)
+                        _buildInfoCard(Icons.person, 'Nom du Directeur', school.directeurNom!),
+                      if (school.directeurEmail != null && school.directeurEmail!.isNotEmpty)
+                        _buildInfoCard(Icons.email, 'Email Directeur', school.directeurEmail!),
+                      if (school.directeurTelephone != null && school.directeurTelephone!.isNotEmpty)
+                        _buildInfoCard(Icons.phone, 'Téléphone Directeur', school.directeurTelephone!),
+                    ],
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Informations pédagogiques
+                    if (school.anneeCreation != null || school.capacite != null || school.langueEnseignement != null) ...[
+                      const Text(
+                        'Informations pédagogiques',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (school.anneeCreation != null)
+                        _buildInfoCard(Icons.calendar_today, 'Année de création', school.anneeCreation!.toString()),
+                      if (school.capacite != null)
+                        _buildInfoCard(Icons.people, 'Capacité', '${school.capacite} élèves'),
+                      if (school.langueEnseignement != null && school.langueEnseignement!.isNotEmpty)
+                        _buildInfoCard(Icons.language, 'Langue d\'enseignement', school.langueEnseignement!),
+                    ],
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Signatures
+                    if (school.signaturePrefet != null || school.signatureChef != null) ...[
+                      const Text(
+                        'Signatures officielles',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (school.signaturePrefet != null && school.signaturePrefet!.isNotEmpty)
+                        _buildInfoCard(Icons.edit, 'Préfet des Études', school.signaturePrefet!),
+                      if (school.signatureChef != null && school.signatureChef!.isNotEmpty)
+                        _buildInfoCard(Icons.edit, 'Chef d\'Établissement', school.signatureChef!),
+                    ],
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Firestore ID
+                    if (school.firestoreId != null && school.firestoreId!.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.cloud, size: 20, color: Colors.grey[500]),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Firestore ID',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                                  ),
+                                  Text(
+                                    school.firestoreId!,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontFamily: 'monospace',
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     
                     const SizedBox(height: 24),
                     
@@ -439,7 +584,7 @@ class _SchoolsTabState extends State<SchoolsTab> {
     );
   }
 
-  Widget _buildContactCard(IconData icon, String label, String value) {
+  Widget _buildInfoCard(IconData icon, String label, String value) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -500,7 +645,6 @@ class _SchoolsTabState extends State<SchoolsTab> {
 
     if (confirm == true) {
       try {
-        // 🔥 Supprimer de Firestore
         if (school.firestoreId != null && school.firestoreId!.isNotEmpty) {
           await FirebaseFirestore.instance
               .collection('schools')
@@ -508,12 +652,11 @@ class _SchoolsTabState extends State<SchoolsTab> {
               .delete();
         }
         
-        // Supprimer localement
         if (school.id != null) {
           await db.deleteEtablissement(school.id!);
         }
         
-        await db.addLog("Super Admin a supprimé l'école: ${school.nom} (Firestore ID: ${school.firestoreId})");
+        await db.addLog("Super Admin a supprimé l'école: ${school.nom}");
         await _loadDataFromFirestore();
         
         if (mounted) {
@@ -601,7 +744,7 @@ class _SchoolsTabState extends State<SchoolsTab> {
             child: TextField(
               onChanged: _filterSchools,
               decoration: InputDecoration(
-                hintText: 'Rechercher une école...',
+                hintText: 'Rechercher par nom, ville, pays...',
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF10B981)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),

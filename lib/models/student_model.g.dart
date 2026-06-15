@@ -31,7 +31,7 @@ class StudentModelAdapter extends TypeAdapter<StudentModel> {
       HiveKey: fields[11] as int?,
       parentUserId: fields[12] as int?,
       parentRelation: fields[13] as String?,
-      schoolId: fields[14] as int?,
+      schoolId: fields[14] as String?,
     );
   }
 

@@ -11,8 +11,21 @@ import 'admin_announcements.dart';
 import 'admin_professors.dart';
 import 'admin_schedule.dart';
 import 'professor_permissions.dart';
-import 'admin_messages_screen.dart'; // ✅ Ajout de l'import des messages
+import 'admin_messages_screen.dart';
+import 'school_settings_screen.dart';
+import 'add_class_screen.dart';
+import 'manage_sections_screen.dart';
 import 'package:ecole_app/models/class_model.dart';
+
+// ===================== PALETTE / THEME HELPERS =====================
+class _AppColors {
+  static const Color primary = Color(0xFF1E3A8A);
+  static const Color primaryLight = Color(0xFF3B5BDB);
+  static const Color background = Color(0xFFF4F6FB);
+  static const Color cardBorder = Color(0xFFE6E9F2);
+  static const Color textDark = Color(0xFF1F2937);
+  static const Color textMuted = Color(0xFF6B7280);
+}
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -30,17 +43,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int totalAnnouncements = 0;
   int totalProfessors = 0;
   int totalStudents = 0;
-  int totalUnreadMessages = 0; // ✅ Ajout compteur messages non lus
+  int totalUnreadMessages = 0;
   List<String> logs = [];
 
   @override
   void initState() {
     super.initState();
     _loadDashboardDataFromFirestore();
-    _loadUnreadMessagesCount(); // ✅ Charger les messages non lus
+    _loadUnreadMessagesCount();
   }
 
-  /// ✅ Charger le nombre de messages non lus pour l'admin
   Future<void> _loadUnreadMessagesCount() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final adminFirestoreId = auth.user?.firestoreId;
@@ -65,7 +77,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  /// 🔥 Charger les statistiques depuis Firestore
   Future<void> _loadDashboardDataFromFirestore() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final schoolId = auth.currentSchoolId;
@@ -95,7 +106,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         totalAnnouncements = announcementsSnapshot.docs.length;
       });
       
-      // Charger les logs depuis Hive (local)
       final history = await db.getAllLogs();
       setState(() {
         logs = history.reversed.toList();
@@ -104,7 +114,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       print('✅ Dashboard chargé: $totalUsers utilisateurs, $totalClasses classes');
     } catch (e) {
       print('❌ Erreur chargement dashboard: $e');
-      // Fallback vers Hive
       final users = await db.getAllUsers();
       final classes = await db.getAllClasses();
       final announcements = await db.getAllAnnouncements();
@@ -140,7 +149,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     "Professeurs",
     "Classes",
     "Annonces",
-    "Messages", // ✅ Changé de "Historique" à "Messages"
+    "Messages",
+    "Paramètres",
     "Historique",
   ];
 
@@ -154,57 +164,81 @@ class _AdminDashboardState extends State<AdminDashboard> {
       AdminProfessors(onChanged: _loadDashboardDataFromFirestore),
       AdminClasses(onChanged: _loadDashboardDataFromFirestore),
       AdminAnnouncements(onChanged: _loadDashboardDataFromFirestore),
-      const AdminMessagesScreen(), // ✅ Ajout de l'écran des messages
+      const AdminMessagesScreen(),
+      const SchoolSettingsScreen(),
       _historyPage(),
     ];
 
     return Scaffold(
+      backgroundColor: _AppColors.background,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
-        title: Text(titles[selectedIndex]),
-        backgroundColor: Colors.blue[800],
-        actions: [
-          if (!auth.isSuperAdmin && auth.hasSchool)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-              child: Row(
-                children: [
-                  const Icon(Icons.business, size: 16, color: Colors.white),
-                  const SizedBox(width: 4),
-                  Text('École ID: ${auth.currentSchoolId}', style: const TextStyle(fontSize: 12, color: Colors.white)),
-                ],
-              ),
+        elevation: 0,
+        centerTitle: false,
+        titleSpacing: 16,
+        title: Text(
+          titles[selectedIndex],
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 19,
+            letterSpacing: 0.2,
+          ),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_AppColors.primary, _AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          // ✅ Badge des messages non lus
+          ),
+        ),
+        actions: [
+          // Bouton pour ajouter une classe (accès rapide)
+          if (selectedIndex == 3)
+            IconButton(
+              icon: const Icon(Icons.add_box_rounded),
+              tooltip: "Ajouter une classe",
+              onPressed: _navigateToAddClass,
+            ),
+          // Bouton pour gérer les sections
+          if (selectedIndex == 3)
+            IconButton(
+              icon: const Icon(Icons.school_rounded),
+              tooltip: "Gérer les sections",
+              onPressed: _navigateToManageSections,
+            ),
+          // L'ID de l'école est SUPPRIMÉ - plus d'affichage
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.message_outlined),
+                icon: const Icon(Icons.mail_outline_rounded),
                 tooltip: "Messages",
                 onPressed: () {
                   setState(() {
-                    selectedIndex = 5; // Aller à l'onglet Messages
+                    selectedIndex = 5;
                   });
-                  _loadUnreadMessagesCount(); // Rafraîchir le compteur
+                  _loadUnreadMessagesCount();
                 },
               ),
               if (totalUnreadMessages > 0)
                 Positioned(
-                  right: 4,
-                  top: 4,
+                  right: 6,
+                  top: 6,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
                       shape: BoxShape.circle,
+                      border: Border.all(color: _AppColors.primary, width: 1.5),
                     ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
                     child: Text(
                       totalUnreadMessages > 9 ? '9+' : '$totalUnreadMessages',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -212,14 +246,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
             ],
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: () async {
-            await _loadDashboardDataFromFirestore();
-            await _loadUnreadMessagesCount();
-          }),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: "Actualiser",
+            onPressed: () async {
+              await _loadDashboardDataFromFirestore();
+              await _loadUnreadMessagesCount();
+            },
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       drawer: _buildDrawer(),
       body: RefreshIndicator(
+        color: _AppColors.primary,
         onRefresh: () async {
           await _loadDashboardDataFromFirestore();
           await _loadUnreadMessagesCount();
@@ -229,47 +269,148 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  void _navigateToAddClass() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddClassScreen()),
+    ).then((_) {
+      _loadDashboardDataFromFirestore();
+    });
+  }
+
+  void _navigateToManageSections() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ManageSectionsScreen()),
+    ).then((_) {
+      _loadDashboardDataFromFirestore();
+    });
+  }
+
   Widget _buildDrawer() {
     final auth = Provider.of<AuthProvider>(context);
     
     return Drawer(
+      backgroundColor: Colors.white,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           Container(
-            decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.blue[800]!, Colors.blue[600]!])),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_AppColors.primary, _AppColors.primaryLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
             child: DrawerHeader(
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.transparent))),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.admin_panel_settings, size: 48, color: Colors.white),
-                  const SizedBox(height: 10),
-                  Text(auth.user?.name ?? "Admin Menu", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  Text(auth.isSuperAdmin ? "Super Administrateur" : "Administrateur", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.admin_panel_settings_rounded, size: 40, color: Colors.white),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    auth.user?.name ?? "Admin Menu",
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      auth.isSuperAdmin ? "Super Administrateur" : "Administrateur",
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          _drawerItem(Icons.dashboard, "Dashboard", 0),
-          _drawerItem(Icons.people, "Utilisateurs", 1),
-          _drawerItem(Icons.school, "Professeurs", 2),
-          _drawerItem(Icons.class_, "Classes", 3),
-          _drawerItem(Icons.announcement, "Annonces", 4),
-          _buildMessagesDrawerItem(), // ✅ Élément avec badge pour les messages
-          _drawerItem(Icons.history, "Historique", 6),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text("Déconnexion"),
-            onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+          const SizedBox(height: 8),
+          _drawerItem(Icons.dashboard_rounded, "Dashboard", 0),
+          _drawerItem(Icons.people_rounded, "Utilisateurs", 1),
+          _drawerItem(Icons.school_rounded, "Professeurs", 2),
+          _drawerItem(Icons.class_rounded, "Classes", 3),
+          if (selectedIndex == 3) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 28, right: 12),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      color: _AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      leading: Icon(Icons.add_box_rounded, size: 19, color: _AppColors.primaryLight),
+                      title: Text("Ajouter une classe", style: TextStyle(fontSize: 13, color: _AppColors.textDark)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _navigateToAddClass();
+                      },
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      color: _AppColors.background,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      leading: Icon(Icons.school_rounded, size: 19, color: _AppColors.primaryLight),
+                      title: Text("Gérer les sections", style: TextStyle(fontSize: 13, color: _AppColors.textDark)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _navigateToManageSections();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          _drawerItem(Icons.announcement_rounded, "Annonces", 4),
+          _buildMessagesDrawerItem(),
+          _drawerItem(Icons.settings_rounded, "Paramètres", 6),
+          _drawerItem(Icons.history_rounded, "Historique", 7),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(height: 24),
           ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              leading: const Icon(Icons.logout_rounded, color: Color(0xFFE53935)),
+              title: const Text("Déconnexion", style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 
-  /// ✅ Élément de menu pour les messages avec badge
   Widget _buildMessagesDrawerItem() {
     final bool isSelected = selectedIndex == 5;
     
@@ -277,14 +418,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: isSelected ? Colors.blue[50] : Colors.transparent,
+        color: isSelected ? _AppColors.primary.withOpacity(0.08) : Colors.transparent,
       ),
       child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Stack(
+          clipBehavior: Clip.none,
           children: [
             Icon(
-              Icons.message_outlined,
-              color: isSelected ? Colors.blue[800] : Colors.grey[700],
+              Icons.mail_outline_rounded,
+              color: isSelected ? _AppColors.primary : Colors.grey[700],
             ),
             if (totalUnreadMessages > 0)
               Positioned(
@@ -293,7 +436,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Container(
                   padding: const EdgeInsets.all(3),
                   decoration: const BoxDecoration(
-                    color: Colors.red,
+                    color: Color(0xFFE53935),
                     shape: BoxShape.circle,
                   ),
                   constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
@@ -313,12 +456,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
         title: Text(
           "Messages",
           style: TextStyle(
-            color: isSelected ? Colors.blue[800] : Colors.black87,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? _AppColors.primary : _AppColors.textDark,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
         selected: isSelected,
-        selectedTileColor: Colors.blue[50],
+        selectedTileColor: _AppColors.primary.withOpacity(0.08),
         onTap: () {
           setState(() {
             selectedIndex = 5;
@@ -331,12 +474,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _drawerItem(IconData icon, String title, int index) {
-    return ListTile(
-      leading: Icon(icon, color: selectedIndex == index ? Colors.blue[800] : Colors.grey[700]),
-      title: Text(title, style: TextStyle(color: selectedIndex == index ? Colors.blue[800] : Colors.black87)),
-      selected: selectedIndex == index,
-      selectedTileColor: Colors.blue[50],
-      onTap: () { setState(() => selectedIndex = index); Navigator.pop(context); },
+    final bool isSelected = selectedIndex == index;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: isSelected ? _AppColors.primary.withOpacity(0.08) : Colors.transparent,
+      ),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(icon, color: isSelected ? _AppColors.primary : Colors.grey[700]),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? _AppColors.primary : _AppColors.textDark,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: _AppColors.primary.withOpacity(0.08),
+        onTap: () { setState(() => selectedIndex = index); Navigator.pop(context); },
+      ),
     );
   }
 
@@ -345,34 +503,78 @@ class _AdminDashboardState extends State<AdminDashboard> {
     
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            elevation: 3,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  CircleAvatar(radius: 24, backgroundColor: Colors.blue[100], child: Icon(Icons.admin_panel_settings, color: Colors.blue[800])),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Bienvenue, ${auth.user?.name ?? 'Administrateur'}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue[900])),
-                        Text(auth.isSuperAdmin ? "Gestion multi-écoles" : "Gestion de votre école", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ],
+          // Bandeau de bienvenue
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_AppColors.primary, _AppColors.primaryLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: _AppColors.primary.withOpacity(0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 30),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Bienvenue, ${auth.user?.name ?? 'Administrateur'}",
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.2),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        auth.isSuperAdmin ? "Gestion multi-écoles" : "Gestion de votre école",
+                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text("Statistiques", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 28),
+
+          // Titre section statistiques
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: _AppColors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "Statistiques",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark, letterSpacing: 0.2),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           GridView.count(
             shrinkWrap: true,
@@ -382,144 +584,260 @@ class _AdminDashboardState extends State<AdminDashboard> {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
-              _statCard("Utilisateurs", totalUsers, Icons.people, Colors.orange),
-              _statCard("Professeurs", totalProfessors, Icons.school, Colors.green),
-              _statCard("Étudiants", totalStudents, Icons.people_outline, Colors.blue),
-              _statCard("Classes", totalClasses, Icons.class_, Colors.purple),
-              _statCard("Annonces", totalAnnouncements, Icons.announcement, Colors.red),
-              // ✅ Carte d'accès rapide pour les messages avec badge
-              _statCardWithBadge("Messages", totalUnreadMessages, Icons.message_outlined, Colors.teal),
+              _statCard("Utilisateurs", totalUsers, Icons.people_alt_rounded, const Color(0xFFF59E0B)),
+              _statCard("Professeurs", totalProfessors, Icons.school_rounded, const Color(0xFF10B981)),
+              _statCard("Étudiants", totalStudents, Icons.groups_rounded, const Color(0xFF3B82F6)),
+              _statCard("Classes", totalClasses, Icons.class_rounded, const Color(0xFF8B5CF6)),
+              _statCard("Annonces", totalAnnouncements, Icons.campaign_rounded, const Color(0xFFEF4444)),
+              _statCardWithBadge("Messages", totalUnreadMessages, Icons.mail_rounded, const Color(0xFF14B8A6)),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          // Titre section accès rapides
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: _AppColors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "Accès rapides",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark, letterSpacing: 0.2),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          // ✅ Section d'accès rapide aux messages
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            color: Colors.teal[50],
-            child: InkWell(
-              onTap: () {
-                setState(() {
-                  selectedIndex = 5;
-                });
-                _loadUnreadMessagesCount();
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.teal[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.message, color: Colors.teal[700], size: 28),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Messagerie",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Consultez et répondez à vos messages",
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (totalUnreadMessages > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(20),
+
+          _quickAccessCard(
+            icon: Icons.class_rounded,
+            iconColor: const Color(0xFF8B5CF6),
+            title: "Gestion des classes",
+            subtitle: "$totalClasses classe(s) • Ajouter, modifier ou supprimer",
+            onTap: () {
+              setState(() {
+                selectedIndex = 3;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _quickAccessCard(
+            icon: Icons.school_rounded,
+            iconColor: const Color(0xFFF59E0B),
+            title: "Sections / Options",
+            subtitle: "Créer et gérer les sections (Littéraire, Scientifique, etc.)",
+            onTap: _navigateToManageSections,
+          ),
+          const SizedBox(height: 12),
+
+          _quickAccessCard(
+            icon: Icons.settings_rounded,
+            iconColor: const Color(0xFF3B82F6),
+            title: "Paramètres du bulletin",
+            subtitle: "Configurer les informations de l'école pour les bulletins",
+            onTap: () {
+              setState(() {
+                selectedIndex = 6;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+
+          _quickAccessCard(
+            icon: Icons.mail_rounded,
+            iconColor: const Color(0xFF14B8A6),
+            title: "Messagerie",
+            subtitle: "Consultez et répondez à vos messages",
+            onTap: () {
+              setState(() {
+                selectedIndex = 5;
+              });
+              _loadUnreadMessagesCount();
+            },
+            trailing: totalUnreadMessages > 0
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE53935).withOpacity(0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                        child: Text(
-                          "$totalUnreadMessages non lu${totalUnreadMessages > 1 ? 's' : ''}",
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    else
-                      const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  ],
-                ),
-              ),
-            ),
+                      ],
+                    ),
+                    child: Text(
+                      "$totalUnreadMessages non lu${totalUnreadMessages > 1 ? 's' : ''}",
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  )
+                : null,
           ),
         ],
       ),
     );
   }
 
-  Widget _statCard(String title, int count, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(colors: [color.withOpacity(0.1), color.withOpacity(0.05)]),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, size: 28, color: color)),
-            const SizedBox(height: 12),
-            Text(count.toString(), style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-            const SizedBox(height: 4),
-            Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-          ],
+  Widget _quickAccessCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 26),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _AppColors.textDark),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(fontSize: 12.5, color: _AppColors.textMuted, height: 1.3),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                trailing ?? Icon(Icons.arrow_forward_ios_rounded, size: 15, color: Colors.grey[400]),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  /// ✅ Carte statistique avec badge pour les messages
-  Widget _statCardWithBadge(String title, int badgeCount, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            selectedIndex = 5;
-          });
-          _loadUnreadMessagesCount();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(colors: [color.withOpacity(0.1), color.withOpacity(0.05)]),
+  Widget _statCard(String title, int count, IconData icon, Color color) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, size: 26, color: color),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            count.toString(),
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: _AppColors.textDark, letterSpacing: 0.3),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12.5, color: _AppColors.textMuted, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCardWithBadge(String title, int badgeCount, IconData icon, Color color) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            setState(() {
+              selectedIndex = 5;
+            });
+            _loadUnreadMessagesCount();
+          },
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Stack(
+                clipBehavior: Clip.none,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                    child: Icon(icon, size: 28, color: color),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(icon, size: 26, color: color),
                   ),
                   if (badgeCount > 0)
                     Positioned(
-                      right: -2,
-                      top: -2,
+                      right: -6,
+                      top: -6,
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE53935),
                           shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
                         ),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                         child: Text(
                           badgeCount > 9 ? '9+' : '$badgeCount',
                           style: const TextStyle(
@@ -536,10 +854,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(height: 12),
               Text(
                 badgeCount > 0 ? "$badgeCount non lu${badgeCount > 1 ? 's' : ''}" : "0 message",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: badgeCount > 0 ? Colors.red : color),
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: badgeCount > 0 ? const Color(0xFFE53935) : color),
               ),
               const SizedBox(height: 4),
-              Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              Text(title, style: TextStyle(fontSize: 12.5, color: _AppColors.textMuted, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -553,9 +871,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text("Aucune action pour le moment", style: TextStyle(fontSize: 18, color: Colors.grey[600])),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _AppColors.primary.withOpacity(0.06),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.history_rounded, size: 56, color: _AppColors.primary.withOpacity(0.4)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Aucune action pour le moment",
+              style: TextStyle(fontSize: 16, color: _AppColors.textMuted, fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       );
@@ -564,28 +892,53 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Card(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  Icon(Icons.history, color: Colors.blue[800]),
-                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.history_rounded, color: _AppColors.primary),
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Journal des actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text("Total: ${logs.length} actions", style: TextStyle(color: Colors.grey[600])),
+                        Text("Journal des actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _AppColors.textDark)),
+                        const SizedBox(height: 2),
+                        Text("Total: ${logs.length} actions", style: TextStyle(color: _AppColors.textMuted, fontSize: 12.5)),
                       ],
                     ),
                   ),
-                  ElevatedButton.icon(
+                  TextButton.icon(
                     onPressed: _clearHistory,
-                    icon: const Icon(Icons.delete_sweep, size: 18),
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 18),
                     label: const Text("Effacer"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red[50], foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFE53935),
+                      backgroundColor: const Color(0xFFE53935).withOpacity(0.08),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ],
               ),
@@ -594,20 +947,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             itemCount: logs.length,
             itemBuilder: (_, i) {
-              return Card(
-                elevation: 1,
+              return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _AppColors.cardBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getLogColor(logs[i]).withOpacity(0.1),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _getLogColor(logs[i]).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Icon(_getLogIcon(logs[i]), size: 20, color: _getLogColor(logs[i])),
                   ),
-                  title: Text(logs[i], style: const TextStyle(fontSize: 13)),
-                  subtitle: Text("Action #${logs.length - i}", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  title: Text(logs[i], style: TextStyle(fontSize: 13, color: _AppColors.textDark, fontWeight: FontWeight.w500)),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text("Action #${logs.length - i}", style: TextStyle(fontSize: 11, color: _AppColors.textMuted)),
+                  ),
                 ),
               );
             },
@@ -622,11 +993,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Confirmation"),
+        title: const Text("Confirmation", style: TextStyle(fontWeight: FontWeight.w700)),
         content: const Text("Voulez-vous vraiment effacer tout l'historique ?"),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Annuler")),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text("Effacer")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: _AppColors.textMuted),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Effacer"),
+          ),
         ],
       ),
     );
@@ -634,24 +1019,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (confirm == true) {
       await db.clearLogs();
       await _loadDashboardDataFromFirestore();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Historique effacé"), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text("Historique effacé"),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
     }
   }
 
   Color _getLogColor(String log) {
     final l = log.toLowerCase();
-    if (l.contains('ajout') || l.contains('cré')) return Colors.green;
-    if (l.contains('supprim') || l.contains('effac')) return Colors.red;
-    if (l.contains('modif') || l.contains('mis à jour')) return Colors.orange;
-    return Colors.blue;
+    if (l.contains('ajout') || l.contains('cré')) return const Color(0xFF10B981);
+    if (l.contains('supprim') || l.contains('effac')) return const Color(0xFFE53935);
+    if (l.contains('modif') || l.contains('mis à jour')) return const Color(0xFFF59E0B);
+    return _AppColors.primaryLight;
   }
 
   IconData _getLogIcon(String log) {
     final l = log.toLowerCase();
-    if (l.contains('professeur')) return Icons.school;
-    if (l.contains('utilisateur')) return Icons.person;
-    if (l.contains('classe')) return Icons.class_;
-    if (l.contains('annonce')) return Icons.announcement;
-    return Icons.history;
+    if (l.contains('professeur')) return Icons.school_rounded;
+    if (l.contains('utilisateur')) return Icons.person_rounded;
+    if (l.contains('classe')) return Icons.class_rounded;
+    if (l.contains('annonce')) return Icons.campaign_rounded;
+    if (l.contains('section')) return Icons.school_rounded;
+    return Icons.history_rounded;
   }
 }

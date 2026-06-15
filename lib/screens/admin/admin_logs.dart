@@ -50,7 +50,7 @@ class _AdminLogsState extends State<AdminLogs> {
           'timestamp': data['timestamp'] != null
               ? (data['timestamp'] as Timestamp).toDate().toIso8601String()
               : DateTime.now().toIso8601String(),
-          'schoolId': data['schoolId'],
+          'schoolId': data['schoolId']?.toString(),
           'userId': data['userId'],
         });
       }
@@ -185,7 +185,7 @@ class _AdminLogsState extends State<AdminLogs> {
   String _getEmptyMessage(AuthProvider auth) {
     if (auth.isSuperAdmin) {
       return "Aucune action enregistrée pour le moment";
-    } else if (auth.hasSchool) {
+    } else if (auth.hasSchool ) {
       return "Aucune action enregistrée pour votre école";
     } else {
       return "Aucune action disponible";

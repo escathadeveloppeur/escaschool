@@ -27,13 +27,11 @@ class SchoolCard extends StatelessWidget {
   /// Récupérer les statistiques EN DIRECT depuis Firestore avec l'ID LOCAL (int)
   Future<Map<String, int>> _getStatsFromFirestore() async {
     try {
-      // ✅ Utiliser l'ID LOCAL (int) comme dans votre base de données
       final schoolLocalId = school.id;
-      if (schoolLocalId == null) return {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0};
+      if (schoolLocalId == null) return {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0, 'parents': 0};
 
       print('📊 Récupération stats pour école ID: $schoolLocalId');
 
-      // Requêtes parallèles vers Firestore avec schoolId = int
       final results = await Future.wait([
         FirebaseFirestore.instance
             .collection('users')
@@ -59,6 +57,12 @@ class SchoolCard extends StatelessWidget {
             .where('role', isEqualTo: 'staff')
             .count()
             .get(),
+        FirebaseFirestore.instance
+            .collection('users')
+            .where('schoolId', isEqualTo: schoolLocalId)
+            .where('role', isEqualTo: 'parent')
+            .count()
+            .get(),
       ]);
 
       return {
@@ -66,10 +70,11 @@ class SchoolCard extends StatelessWidget {
         'teachers': results[1].count ?? 0,
         'admins': results[2].count ?? 0,
         'staff': results[3].count ?? 0,
+        'parents': results[4].count ?? 0,
       };
     } catch (e) {
       print('❌ Erreur stats Firestore: $e');
-      return {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0};
+      return {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0, 'parents': 0};
     }
   }
 
@@ -121,7 +126,6 @@ class SchoolCard extends StatelessWidget {
       try {
         final schoolService = SchoolService();
         
-        // Mettre à jour DIRECTEMENT dans Firestore
         final schoolDocRef = FirebaseFirestore.instance
             .collection('schools')
             .doc(school.firestoreId);
@@ -131,7 +135,6 @@ class SchoolCard extends StatelessWidget {
           'updatedAt': FieldValue.serverTimestamp(),
         });
         
-        // Mettre à jour localement aussi
         final db = DBHelper();
         await db.updateEtablissementStatus(school.id!, newStatus);
         await db.addLog("Super Admin a ${newStatus ? 'activé' : 'suspendu'} l'école: ${school.nom}");
@@ -160,12 +163,26 @@ class SchoolCard extends StatelessWidget {
     }
   }
 
+  String _getCountryFlag(String? pays) {
+    if (pays == null) return '🌍';
+    if (pays.contains('Congo') || pays.contains('RDC')) return '🇨🇩';
+    if (pays.contains('France')) return '🇫🇷';
+    if (pays.contains('Belgique')) return '🇧🇪';
+    if (pays.contains('Canada')) return '🇨🇦';
+    if (pays.contains('Suisse')) return '🇨🇭';
+    if (pays.contains('Sénégal')) return '🇸🇳';
+    if (pays.contains('Côte')) return '🇨🇮';
+    if (pays.contains('Cameroun')) return '🇨🇲';
+    if (pays.contains('Maroc')) return '🇲🇦';
+    return '🌍';
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, int>>(
       future: _getStatsFromFirestore(),
       builder: (context, snapshot) {
-        final stats = snapshot.data ?? {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0};
+        final stats = snapshot.data ?? {'students': 0, 'teachers': 0, 'admins': 0, 'staff': 0, 'parents': 0};
         
         return GestureDetector(
           onTap: onTap,
@@ -204,9 +221,22 @@ class SchoolCard extends StatelessWidget {
                                 ),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Center(
-                          child: Icon(Icons.business, color: Colors.white, size: 28),
-                        ),
+                        child: school.logoUrl != null && school.logoUrl!.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.network(
+                                  school.logoUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Center(
+                                      child: Icon(Icons.business, color: Colors.white, size: 28),
+                                    );
+                                  },
+                                ),
+                              )
+                            : const Center(
+                                child: Icon(Icons.business, color: Colors.white, size: 28),
+                              ),
                       ),
                       if (!school.isActive)
                         Positioned(
@@ -230,14 +260,26 @@ class SchoolCard extends StatelessWidget {
                   title: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          school.nom,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            letterSpacing: -0.3,
-                            color: school.isActive ? Colors.black87 : Colors.grey[600],
-                          ),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                school.nom,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  letterSpacing: -0.3,
+                                  color: school.isActive ? Colors.black87 : Colors.grey[600],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _getCountryFlag(school.pays),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
                         ),
                       ),
                       if (!school.isActive)
@@ -262,15 +304,67 @@ class SchoolCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
-                      if (school.type != null && school.type!.isNotEmpty)
-                        Text(
-                          school.type!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: school.isActive ? Colors.grey[600] : Colors.grey[500],
-                          ),
-                        ),
+                      // Type et statut
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (school.type != null && school.type!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                school.type!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: school.isActive ? Colors.blue[700] : Colors.grey[500],
+                                ),
+                              ),
+                            ),
+                          if (school.statut != null && school.statut!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                school.statut!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: school.isActive ? Colors.orange[700] : Colors.grey[500],
+                                ),
+                              ),
+                            ),
+                          if (school.ville != null && school.ville!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.location_on, size: 10, color: school.isActive ? Colors.teal[700] : Colors.grey[500]),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    school.ville!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: school.isActive ? Colors.teal[700] : Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
+                      // Statistiques
                       Wrap(
                         spacing: 8,
                         runSpacing: 6,
@@ -279,10 +373,11 @@ class SchoolCard extends StatelessWidget {
                           _buildStatChip(Icons.person, 'Enseignants', stats['teachers']!, Colors.green, school.isActive),
                           _buildStatChip(Icons.admin_panel_settings, 'Admins', stats['admins']!, Colors.purple, school.isActive),
                           _buildStatChip(Icons.work, 'Personnel', stats['staff']!, Colors.orange, school.isActive),
+                          _buildStatChip(Icons.family_restroom, 'Parents', stats['parents']!, Colors.teal, school.isActive),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      // AFFICHAGE DES ID
+                      // Codes et identifiants
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
@@ -318,8 +413,78 @@ class SchoolCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          if (school.anneeCreation != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_today, size: 10, color: school.isActive ? Colors.purple[700] : Colors.grey[500]),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${school.anneeCreation}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: school.isActive ? Colors.purple[700] : Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (school.capacite != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.people, size: 10, color: school.isActive ? Colors.amber[700] : Colors.grey[500]),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'Max: ${school.capacite}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: school.isActive ? Colors.amber[700] : Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
+                      // Directeur (si disponible)
+                      if (school.directeurNom != null && school.directeurNom!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person, size: 12, color: school.isActive ? Colors.indigo[400] : Colors.grey[400]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Dir: ${school.directeurNom}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: school.isActive ? Colors.indigo[700] : Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   trailing: Row(

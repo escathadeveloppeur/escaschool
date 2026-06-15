@@ -20,50 +20,60 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
     
-    // Configuration pour Android
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    
-    // Configuration pour iOS
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-    
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-    
-    await _localNotifications.initialize(settings);
-    
-    // Demander la permission
-    await _firebaseMessaging.requestPermission();
-    
-    // Récupérer le token FCM
-    _token = await _firebaseMessaging.getToken();
-    print('📱 FCM Token: $_token');
-    
-    // Sauvegarder le token dans Firestore
-    await _saveTokenToFirestore();
-    
-    // Écouter les messages en premier plan
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    
-    // Écouter les messages quand l'app est en arrière-plan
-    FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
-    
-    _isInitialized = true;
+    try {
+      // Configuration pour Android - Utiliser une icône système qui existe toujours
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('ic_menu_add'); // Icône Android intégrée
+      
+      // Configuration pour iOS
+      const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      
+      const InitializationSettings settings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
+      
+      await _localNotifications.initialize(settings);
+      
+      // Demander la permission
+      await _firebaseMessaging.requestPermission();
+      
+      // Récupérer le token FCM
+      _token = await _firebaseMessaging.getToken();
+      print('📱 FCM Token: $_token');
+      
+      // Sauvegarder le token dans Firestore
+      await _saveTokenToFirestore();
+      
+      // Écouter les messages en premier plan
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      
+      // Écouter les messages quand l'app est en arrière-plan
+      FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
+      
+      _isInitialized = true;
+      print('✅ Notifications initialisées avec succès');
+    } catch (e) {
+      print('⚠️ Erreur initialisation notifications (non-bloquante): $e');
+      // Ne pas propager l'erreur pour que l'app continue
+    }
   }
   
   /// Sauvegarder le token dans Firestore
   Future<void> _saveTokenToFirestore() async {
-    final auth = FirebaseAuth.instance.currentUser;
-    if (auth != null && _token != null) {
-      await FirebaseFirestore.instance.collection('users').doc(auth.uid).update({
-        'fcmToken': _token,
-        'lastActive': FieldValue.serverTimestamp(),
-      });
+    try {
+      final auth = FirebaseAuth.instance.currentUser;
+      if (auth != null && _token != null) {
+        await FirebaseFirestore.instance.collection('users').doc(auth.uid).update({
+          'fcmToken': _token,
+          'lastActive': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('⚠️ Erreur sauvegarde token: $e');
     }
   }
   
@@ -86,30 +96,34 @@ class NotificationService {
   
   /// Afficher une notification locale
   Future<void> _showLocalNotification(String title, String body, Map<String, dynamic> data) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'messages_channel',
-      'Messages',
-      channelDescription: 'Notifications des messages',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-    );
-    
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
-    
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-    
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title,
-      body,
-      details,
-      payload: data.toString(),
-    );
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'messages_channel',
+        'Messages',
+        channelDescription: 'Notifications des messages',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      );
+      
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+      
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+      
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        details,
+        payload: data.toString(),
+      );
+    } catch (e) {
+      print('⚠️ Erreur affichage notification: $e');
+    }
   }
   
   /// Envoyer une notification à un utilisateur
@@ -120,8 +134,6 @@ class NotificationService {
       final token = userDoc.data()?['fcmToken'];
       
       if (token != null && token.isNotEmpty) {
-        // Envoyer via Firebase Cloud Messaging
-        // Note: Vous devez implémenter un Cloud Function ou un serveur backend
         print('📤 Envoi de notification à $userId: $title');
         
         // Ici vous appelleriez votre backend ou Firebase Cloud Function
@@ -145,6 +157,8 @@ class NotificationService {
     
     // Option 2: Appeler votre backend
     // Option 3: Utiliser un service comme OneSignal
+    
+    print('📤 Notification prête à être envoyée: "$title"');
   }
   
   /// Envoyer une notification pour un nouveau message
@@ -202,20 +216,24 @@ class NotificationService {
   
   /// Envoyer une notification à tous les étudiants d'une classe
   Future<void> notifyClass(String className, String title, String body, {Map<String, dynamic>? data}) async {
-    final studentsSnapshot = await FirebaseFirestore.instance
-        .collection('students')
-        .where('className', isEqualTo: className)
-        .get();
-    
-    for (var doc in studentsSnapshot.docs) {
-      final studentData = doc.data();
-      final parentId = studentData['parentUserId'];
-      final studentId = doc.id;
+    try {
+      final studentsSnapshot = await FirebaseFirestore.instance
+          .collection('students')
+          .where('className', isEqualTo: className)
+          .get();
       
-      if (parentId != null) {
-        await sendNotificationToUser(parentId, title, body, data: data);
+      for (var doc in studentsSnapshot.docs) {
+        final studentData = doc.data();
+        final parentId = studentData['parentUserId'];
+        final studentId = doc.id;
+        
+        if (parentId != null) {
+          await sendNotificationToUser(parentId, title, body, data: data);
+        }
+        await sendNotificationToUser(studentId, title, body, data: data);
       }
-      await sendNotificationToUser(studentId, title, body, data: data);
+    } catch (e) {
+      print('⚠️ Erreur envoi notification à la classe: $e');
     }
   }
 }

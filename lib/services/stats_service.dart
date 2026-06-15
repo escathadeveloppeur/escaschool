@@ -58,7 +58,7 @@ class StatsService {
     required String action,
     required String description,
     required String level, // 'info', 'warning', 'error'
-    int? schoolId,
+    String? schoolId,
     int? userId,
     Map<String, dynamic>? metadata,
   }) async {
@@ -114,7 +114,7 @@ class StatsService {
   // ==================== GESTION DES PAIEMENTS DES ÉCOLES ====================
 
   Future<void> recordSchoolPayment({
-    required int schoolId,
+    required String schoolId,
     required double amount,
     required String month,
     required int year,

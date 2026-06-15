@@ -22,7 +22,7 @@ class ClassModelAdapter extends TypeAdapter<ClassModel> {
       level: fields[2] as String?,
       year: fields[3] as String?,
       teacher: fields[4] as String?,
-      schoolId: fields[8] as int?,
+      schoolId: fields[8] as String?,
       students: (fields[5] as List).cast<String>(),
       hiveKey: fields[6] as int?,
       subjects: (fields[7] as List)

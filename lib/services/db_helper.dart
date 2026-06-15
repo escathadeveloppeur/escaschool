@@ -36,6 +36,10 @@ class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
   factory DBHelper() => _instance;
   DBHelper._internal();
+    static const String staffBox = 'staff';  // ✅ Constante pour le nom de la box
+  static const String staffPaymentsBox = 'staff_payments';
+  static const String _staffBox = 'staff';
+  static const String _staffPaymentsBox = 'staff_payments';
 
   // ================= CONSTANTES =================
   static const String BOX_NAME = 'ecole_box';
@@ -163,7 +167,290 @@ await Hive.openBox<Map<String, dynamic>>(ETABLISSEMENT_BOX);
   await Hive.openBox<StaffModel>('staff');
   await Hive.openBox<StaffPaymentModel>('staff_payments');
 }
+// lib/services/db_helper.dart
 
+// ================= MESSAGES =================
+
+/// Ajouter un message
+Future<void> addMessage(MessageModel message) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final messageMap = {
+      'key': message.key,
+      'senderName': message.senderName,
+      'senderRole': message.senderRole,
+      'recipientName': message.recipientName,
+      'recipientRole': message.recipientRole,
+      'studentName': message.studentName,
+      'subject': message.subject,
+      'content': message.content,
+      'date': message.date.toIso8601String(),
+      'read': message.read,
+      'important': message.important,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+    await box.put(message.key, messageMap);
+    print('✅ Message ajouté: ${message.key}');
+  } catch (e) {
+    print('❌ Erreur ajout message: $e');
+    throw e;
+  }
+}
+
+/// Récupérer tous les messages
+Future<List<MessageModel>> getAllMessages() async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final List<MessageModel> messages = [];
+    
+    for (var key in box.keys) {
+      final data = box.get(key) as Map;
+      messages.add(MessageModel(
+        senderName: data['senderName'] ?? '',
+        senderRole: data['senderRole'] ?? '',
+        recipientName: data['recipientName'] ?? '',
+        recipientRole: data['recipientRole'] ?? '',
+        studentName: data['studentName'] ?? '',
+        subject: data['subject'] ?? '',
+        content: data['content'] ?? '',
+        date: data['date'] != null ? DateTime.parse(data['date']) : DateTime.now(),
+        read: data['read'] ?? false,
+        important: data['important'] ?? false,
+      ));
+    }
+    
+    // Trier par date (plus récent en premier)
+    messages.sort((a, b) => b.date.compareTo(a.date));
+    return messages;
+  } catch (e) {
+    print('❌ Erreur récupération messages: $e');
+    return [];
+  }
+}
+
+/// Récupérer un message par sa clé
+Future<MessageModel?> getMessageByKey(String key) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final data = box.get(key) as Map?;
+    
+    if (data == null) return null;
+    
+    return MessageModel(
+      senderName: data['senderName'] ?? '',
+      senderRole: data['senderRole'] ?? '',
+      recipientName: data['recipientName'] ?? '',
+      recipientRole: data['recipientRole'] ?? '',
+      studentName: data['studentName'] ?? '',
+      subject: data['subject'] ?? '',
+      content: data['content'] ?? '',
+      date: data['date'] != null ? DateTime.parse(data['date']) : DateTime.now(),
+      read: data['read'] ?? false,
+      important: data['important'] ?? false,
+    );
+  } catch (e) {
+    print('❌ Erreur récupération message par clé: $e');
+    return null;
+  }
+}
+
+/// Mettre à jour le statut de lecture d'un message
+Future<void> updateMessageReadStatus(String key, bool read) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final data = box.get(key) as Map?;
+    
+    if (data != null) {
+      data['read'] = read;
+      data['updatedAt'] = DateTime.now().toIso8601String();
+      await box.put(key, data);
+      print('✅ Statut lecture mis à jour: $key');
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour statut lecture: $e');
+  }
+}
+
+/// Marquer un message comme important
+Future<void> markMessageAsImportant(String key, bool important) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final data = box.get(key) as Map?;
+    
+    if (data != null) {
+      data['important'] = important;
+      data['updatedAt'] = DateTime.now().toIso8601String();
+      await box.put(key, data);
+      print('✅ Message marqué comme ${important ? "important" : "normal"}: $key');
+    }
+  } catch (e) {
+    print('❌ Erreur marquage message: $e');
+  }
+}
+
+/// Supprimer un message
+Future<void> deleteMessage(String key) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    await box.delete(key);
+    print('✅ Message supprimé: $key');
+  } catch (e) {
+    print('❌ Erreur suppression message: $e');
+  }
+}
+
+/// Supprimer tous les messages
+Future<void> deleteAllMessages() async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    await box.clear();
+    print('✅ Tous les messages supprimés');
+  } catch (e) {
+    print('❌ Erreur suppression tous les messages: $e');
+  }
+}
+
+/// Compter le nombre de messages non lus pour un utilisateur
+Future<int> getUnreadMessagesCount({
+  required String recipientName,
+  required String recipientRole,
+  String? studentName,
+}) async {
+  try {
+    final messages = await getAllMessages();
+    
+    return messages.where((message) {
+      if (studentName != null && studentName.isNotEmpty) {
+        return message.recipientName == recipientName &&
+               message.recipientRole == recipientRole &&
+               message.studentName == studentName &&
+               !message.read;
+      }
+      return message.recipientName == recipientName &&
+             message.recipientRole == recipientRole &&
+             !message.read;
+    }).length;
+  } catch (e) {
+    print('❌ Erreur comptage messages non lus: $e');
+    return 0;
+  }
+}
+
+/// Récupérer les messages d'un utilisateur spécifique
+Future<List<MessageModel>> getMessagesForRecipient({
+  required String recipientName,
+  required String recipientRole,
+  String? studentName,
+}) async {
+  try {
+    final messages = await getAllMessages();
+    
+    return messages.where((message) {
+      if (studentName != null && studentName.isNotEmpty) {
+        return message.recipientName == recipientName &&
+               message.recipientRole == recipientRole &&
+               message.studentName == studentName;
+      }
+      return message.recipientName == recipientName &&
+             message.recipientRole == recipientRole;
+    }).toList();
+  } catch (e) {
+    print('❌ Erreur récupération messages par destinataire: $e');
+    return [];
+  }
+}
+
+/// Récupérer les messages envoyés par un utilisateur
+Future<List<MessageModel>> getMessagesFromSender({
+  required String senderName,
+  required String senderRole,
+}) async {
+  try {
+    final messages = await getAllMessages();
+    
+    return messages.where((message) {
+      return message.senderName == senderName &&
+             message.senderRole == senderRole;
+    }).toList();
+  } catch (e) {
+    print('❌ Erreur récupération messages par expéditeur: $e');
+    return [];
+  }
+}
+
+/// Récupérer les messages importants d'un utilisateur
+Future<List<MessageModel>> getImportantMessagesForRecipient({
+  required String recipientName,
+  required String recipientRole,
+  String? studentName,
+}) async {
+  try {
+    final messages = await getAllMessages();
+    
+    return messages.where((message) {
+      if (studentName != null && studentName.isNotEmpty) {
+        return message.recipientName == recipientName &&
+               message.recipientRole == recipientRole &&
+               message.studentName == studentName &&
+               message.important;
+      }
+      return message.recipientName == recipientName &&
+             message.recipientRole == recipientRole &&
+             message.important;
+    }).toList();
+  } catch (e) {
+    print('❌ Erreur récupération messages importants: $e');
+    return [];
+  }
+}
+
+/// Compter le nombre total de messages
+Future<int> getTotalMessagesCount() async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    return box.length;
+  } catch (e) {
+    print('❌ Erreur comptage total messages: $e');
+    return 0;
+  }
+}
+
+/// Vérifier si un message existe
+Future<bool> messageExists(String key) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    return box.containsKey(key);
+  } catch (e) {
+    print('❌ Erreur vérification existence message: $e');
+    return false;
+  }
+}
+
+/// Mettre à jour un message existant
+Future<void> updateMessage(MessageModel message) async {
+  try {
+    final box = await Hive.openBox<Map>('messages');
+    final messageMap = {
+      'key': message.key,
+      'senderName': message.senderName,
+      'senderRole': message.senderRole,
+      'recipientName': message.recipientName,
+      'recipientRole': message.recipientRole,
+      'studentName': message.studentName,
+      'subject': message.subject,
+      'content': message.content,
+      'date': message.date.toIso8601String(),
+      'read': message.read,
+      'important': message.important,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    await box.put(message.key, messageMap);
+    print('✅ Message mis à jour: ${message.key}');
+  } catch (e) {
+    print('❌ Erreur mise à jour message: $e');
+    throw e;
+  }
+}
   // ================= USERS =================
   Future<void> _seedUsers() async {
     final Map<String, Map<String, dynamic>> initial = {};
@@ -1481,11 +1768,7 @@ Future<ScheduleModel?> getScheduleByKey(int? key) async {
 }
 
 // Pour MessageModel
-Future<MessageModel?> getMessageByKey(int? key) async {
-  if (key == null) return null;
-  final box = await Hive.openBox<MessageModel>('messages');
-  return box.get(key);
-}
+
 Future<StudentModel?> getStudentByKey(dynamic key) async {
   if (key == null) return null;
   final box = await Hive.openBox<StudentModel>('students');
@@ -1521,64 +1804,371 @@ Future<Map<String, dynamic>?> getUserById(int id) async {
 // Dans db_helper.dart, ajoutez ces méthodes :
 
 // Pour StaffModel
-Future<int> addStaff(StaffModel staff) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  final key = await box.add(staff);
-  return key;
-}
+// db_helper.dart - Version mise à jour avec Hive
 
-Future<void> updateStaff(int id, StaffModel staff) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  await box.put(id, staff);
-}
 
-Future<void> deleteStaff(int id) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  await box.delete(id);
-}
 
-Future<List<StaffModel>> getAllStaff() async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  return box.values.toList();
-}
+  // ==================== CONSTANTES DES BOX ====================
 
-Future<List<StaffModel>> getStaffBySchool(int schoolId) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  return box.values.where((s) => s.schoolId == schoolId).toList();
-}
 
-Future<StaffModel?> getStaffById(int id) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  return box.get(id);
-}
+  // ==================== GESTION DU PERSONNEL ====================
 
-Future<void> updateStaffFirestoreId(int id, String firestoreId) async {
-  final box = await Hive.openBox<StaffModel>('staff');
-  final staff = box.get(id);
-  if (staff != null) {
-    staff.firestoreId = firestoreId;
-    await box.put(id, staff);
+  /// Ajouter un membre du personnel
+  Future<int> addStaff(StaffModel staff) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final key = await box.add(staff);
+      print('✅ Personnel ajouté localement avec ID: $key');
+      return key;
+    } catch (e) {
+      print('❌ Erreur ajout personnel: $e');
+      throw e;
+    }
+  }
+
+  /// Mettre à jour un membre du personnel
+  Future<void> updateStaff(int id, StaffModel staff) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      await box.put(id, staff);
+      print('✅ Personnel mis à jour localement: ID $id');
+    } catch (e) {
+      print('❌ Erreur mise à jour personnel: $e');
+      throw e;
+    }
+  }
+
+  /// Supprimer un membre du personnel
+  Future<void> deleteStaff(int id) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      await box.delete(id);
+      print('🗑️ Personnel supprimé localement: ID $id');
+    } catch (e) {
+      print('❌ Erreur suppression personnel: $e');
+      throw e;
+    }
+  }
+
+  /// Récupérer tout le personnel
+  Future<List<StaffModel>> getAllStaff() async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final staffList = box.values.toList();
+      print('📋 Récupération de ${staffList.length} employés');
+      return staffList;
+    } catch (e) {
+      print('❌ Erreur récupération personnel: $e');
+      return [];
+    }
+  }
+
+  /// Récupérer le personnel par école
+  /// ✅ MODIFIÉ: schoolId maintenant en String
+  Future<List<StaffModel>> getStaffBySchool(String schoolId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final staffList = box.values
+          .where((s) => s.schoolId == schoolId)  // ✅ String comparison
+          .toList();
+      print('📋 ${staffList.length} employés pour l\'école: $schoolId');
+      return staffList;
+    } catch (e) {
+      print('❌ Erreur récupération personnel par école: $e');
+      return [];
+    }
+  }
+
+  /// Récupérer un personnel par son ID
+  Future<StaffModel?> getStaffById(int id) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final staff = box.get(id);
+      if (staff != null) {
+        print('✅ Personnel trouvé: ${staff.fullName} (ID: $id)');
+      } else {
+        print('⚠️ Aucun personnel trouvé avec ID: $id');
+      }
+      return staff;
+    } catch (e) {
+      print('❌ Erreur récupération personnel par ID: $e');
+      return null;
+    }
+  }
+
+  /// Mettre à jour le Firestore ID d'un personnel
+  Future<void> updateStaffFirestoreId(int id, String firestoreId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final staff = box.get(id);
+      if (staff != null) {
+        staff.firestoreId = firestoreId;
+        await box.put(id, staff);
+        print('✅ Firestore ID mis à jour pour personnel ID $id: $firestoreId');
+      } else {
+        print('⚠️ Personnel non trouvé pour mise à jour Firestore ID: $id');
+      }
+    } catch (e) {
+      print('❌ Erreur mise à jour Firestore ID: $e');
+      throw e;
+    }
+  }
+
+  /// Supprimer tout le personnel d'une école
+  Future<void> deleteStaffBySchool(String schoolId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final keysToDelete = <dynamic>[];
+      
+      for (var key in box.keys) {
+        final staff = box.get(key);
+        if (staff != null && staff.schoolId == schoolId) {
+          keysToDelete.add(key);
+        }
+      }
+      
+      for (var key in keysToDelete) {
+        await box.delete(key);
+      }
+      
+      print('🗑️ ${keysToDelete.length} employés supprimés pour l\'école: $schoolId');
+    } catch (e) {
+      print('❌ Erreur suppression personnel par école: $e');
+      throw e;
+    }
+  }
+
+  /// Vérifier si un personnel existe
+  Future<bool> staffExists(String fullName, String position, String schoolId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final exists = box.values.any((staff) => 
+        staff.fullName.toLowerCase() == fullName.toLowerCase() &&
+        staff.position == position &&
+        staff.schoolId == schoolId
+      );
+      return exists;
+    } catch (e) {
+      print('❌ Erreur vérification existence personnel: $e');
+      return false;
+    }
+  }
+
+  /// Compter le nombre de personnel par école
+  Future<int> countStaffBySchool(String schoolId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final count = box.values.where((s) => s.schoolId == schoolId).length;
+      return count;
+    } catch (e) {
+      print('❌ Erreur comptage personnel: $e');
+      return 0;
+    }
+  }
+
+  /// Récupérer le personnel par poste
+  Future<List<StaffModel>> getStaffByPosition(String position, String schoolId) async {
+    try {
+      final box = await Hive.openBox<StaffModel>(staffBox);
+      final staffList = box.values
+          .where((s) => s.position == position && s.schoolId == schoolId)
+          .toList();
+      return staffList;
+    } catch (e) {
+      print('❌ Erreur récupération personnel par poste: $e');
+      return [];
+    }
+  }
+
+  // ==================== GESTION DES PAIEMENTS DU PERSONNEL ====================
+
+ /// Ajouter un paiement pour un personnel
+Future<int> addStaffPayment(StaffPaymentModel payment) async {
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    final key = await box.add(payment);
+    print('✅ Paiement ajouté: ${payment.netSalary} FCFA pour staff ID ${payment.staffId}');
+    return key;
+  } catch (e) {
+    print('❌ Erreur ajout paiement: $e');
+    throw e;
   }
 }
 
-// Pour StaffPaymentModel
-Future<int> addStaffPayment(StaffPaymentModel payment) async {
-  final box = await Hive.openBox<StaffPaymentModel>('staff_payments');
-  final key = await box.add(payment);
-  return key;
-}
-
+/// Récupérer les paiements d'un personnel
 Future<List<StaffPaymentModel>> getStaffPaymentsByStaff(int staffId) async {
-  final box = await Hive.openBox<StaffPaymentModel>('staff_payments');
-  return box.values.where((p) => p.staffId == staffId).toList();
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    final payments = box.values
+        .where((p) => p.staffId == staffId)
+        .toList();
+    print('📋 ${payments.length} paiements pour staff ID $staffId');
+    return payments;
+  } catch (e) {
+    print('❌ Erreur récupération paiements par staff: $e');
+    return [];
+  }
 }
 
+/// Récupérer tous les paiements du personnel
 Future<List<StaffPaymentModel>> getAllStaffPayments() async {
-  final box = await Hive.openBox<StaffPaymentModel>('staff_payments');
-  return box.values.toList();
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    final payments = box.values.toList();
+    print('📋 ${payments.length} paiements totaux');
+    return payments;
+  } catch (e) {
+    print('❌ Erreur récupération tous les paiements: $e');
+    return [];
+  }
 }
-// Dans db_helper.dart, ajoutez cette méthode :
 
+/// Mettre à jour un paiement
+Future<void> updateStaffPayment(int id, StaffPaymentModel payment) async {
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    await box.put(id, payment);
+    print('✅ Paiement mis à jour: ID $id');
+  } catch (e) {
+    print('❌ Erreur mise à jour paiement: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un paiement
+Future<void> deleteStaffPayment(int id) async {
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    await box.delete(id);
+    print('🗑️ Paiement supprimé: ID $id');
+  } catch (e) {
+    print('❌ Erreur suppression paiement: $e');
+    throw e;
+  }
+}
+
+/// Récupérer les paiements par école
+Future<List<StaffPaymentModel>> getStaffPaymentsBySchool(String schoolId) async {
+  try {
+    final staffBoxInstance = await Hive.openBox<StaffModel>(_staffBox);
+    final paymentsBoxInstance = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    
+    // Récupérer tous les staff IDs de l'école
+    final staffIds = staffBoxInstance.values
+        .where((s) => s.schoolId == schoolId)
+        .map((s) => s.id)
+        .toList();
+    
+    // Filtrer les paiements par staff IDs
+    final payments = paymentsBoxInstance.values
+        .where((p) => staffIds.contains(p.staffId))
+        .toList();
+    
+    print('📋 ${payments.length} paiements pour l\'école: $schoolId');
+    return payments;
+  } catch (e) {
+    print('❌ Erreur récupération paiements par école: $e');
+    return [];
+  }
+}
+
+/// Récupérer les paiements par période
+Future<List<StaffPaymentModel>> getStaffPaymentsByDateRange(
+  DateTime startDate, 
+  DateTime endDate
+) async {
+  try {
+    final box = await Hive.openBox<StaffPaymentModel>(_staffPaymentsBox);
+    final payments = box.values
+        .where((p) {
+          // Convertir paymentDate (String) en DateTime pour la comparaison
+          final paymentDateTime = DateTime.tryParse(p.paymentDate);
+          if (paymentDateTime == null) return false;
+          return paymentDateTime.isAfter(startDate.subtract(const Duration(days: 1))) &&
+                 paymentDateTime.isBefore(endDate.add(const Duration(days: 1)));
+        })
+        .toList();
+    print('📋 ${payments.length} paiements entre $startDate et $endDate');
+    return payments;
+  } catch (e) {
+    print('❌ Erreur récupération paiements par date: $e');
+    return [];
+  }
+}
+
+/// Calculer le total des paiements pour un staff
+Future<double> getTotalPaymentsByStaff(int staffId) async {
+  try {
+    final payments = await getStaffPaymentsByStaff(staffId);
+    // ✅ Correction: utiliser netSalary au lieu de amount
+    final total = payments.fold(0.0, (sum, p) => sum + p.netSalary);
+    print('💰 Total des paiements pour staff $staffId: $total FCFA');
+    return total;
+  } catch (e) {
+    print('❌ Erreur calcul total paiements: $e');
+    return 0.0;
+  }
+}
+
+/// Vérifier si un paiement existe déjà pour une période
+Future<bool> paymentExistsForPeriod(int staffId, DateTime month) async {
+  try {
+    final payments = await getStaffPaymentsByStaff(staffId);
+    final exists = payments.any((p) {
+      // Convertir paymentDate (String) en DateTime
+      final paymentDate = DateTime.tryParse(p.paymentDate);
+      if (paymentDate == null) return false;
+      return paymentDate.year == month.year &&
+             paymentDate.month == month.month;
+    });
+    return exists;
+  } catch (e) {
+    print('❌ Erreur vérification paiement existant: $e');
+    return false;
+  }
+}
+
+  // ==================== MÉTHODES UTILITAIRES ====================
+
+  /// Fermer toutes les boxes (à appeler avant la fermeture de l'app)
+  Future<void> closeAllBoxes() async {
+    try {
+      await Hive.close();
+      print('✅ Toutes les boxes Hive sont fermées');
+    } catch (e) {
+      print('❌ Erreur fermeture boxes: $e');
+    }
+  }
+
+  /// Nettoyer les données d'une école (supprimer tout le personnel et leurs paiements)
+  Future<void> cleanSchoolData(String schoolId) async {
+    try {
+      // Supprimer les paiements liés aux staff de l'école
+      final staffList = await getStaffBySchool(schoolId);
+      final paymentsBox = await Hive.openBox<StaffPaymentModel>(staffPaymentsBox);
+      
+      for (var staff in staffList) {
+        final paymentsToDelete = <dynamic>[];
+        for (var key in paymentsBox.keys) {
+          final payment = paymentsBox.get(key);
+          if (payment != null && payment.staffId == staff.id) {
+            paymentsToDelete.add(key);
+          }
+        }
+        for (var key in paymentsToDelete) {
+          await paymentsBox.delete(key);
+        }
+      }
+      
+      // Supprimer le personnel
+      await deleteStaffBySchool(schoolId);
+      
+      print('✅ Données nettoyées pour l\'école: $schoolId');
+    } catch (e) {
+      print('❌ Erreur nettoyage données école: $e');
+      throw e;
+    }
+  }
 
 
 
@@ -1879,7 +2469,7 @@ Future<List<ProfessorModel>> getProfessorsBySchool(int schoolId) async {
   return result;
 }
 // Récupérer les classes par école
-Future<List<ClassModel>> getClassesBySchool(int schoolId) async {
+Future<List<ClassModel>> getClassesBySchool(String schoolId) async {
   final allClasses = await getAllClasses();
   return allClasses.where((c) => c.schoolId == schoolId).toList();
 }
@@ -2254,13 +2844,7 @@ Future<Box<MessageModel>> getMessageBox() async =>
 Future<Box<NotificationModel>> getNotificationBox() async =>
     await Hive.openBox<NotificationModel>('notifications');
 
-Future<List<MessageModel>> getAllMessages() async {
-  final box = await getMessageBox();
-  final messages = box.values.toList();
-  // Trier par date décroissante (le plus récent en premier)
-  messages.sort((a, b) => b.date.compareTo(a.date));
-  return messages;
-}
+
 
 // Marquer un message comme lu
 Future<void> markMessageAsRead(int messageKey) async {
@@ -2305,11 +2889,7 @@ Future<void> respondToAbsence(int notificationKey, String justification) async {
 }
 
 // Ajouter un message
-Future<void> addMessage(MessageModel message) async {
-  final box = await getMessageBox();
-  final key = await box.add(message);
-; // Stocker la clé dans l'objet si nécessaire
-}
+
 // Ajouter un message (envoyé par le parent ou reçu)
 
 

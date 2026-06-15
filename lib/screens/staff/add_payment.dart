@@ -19,7 +19,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   final DBHelper db = DBHelper();
   final _formKey = GlobalKey<FormState>();
 
-  List<Map<String, dynamic>> students = [];
+  List<Map<String, dynamic>> allStudents = [];
+  List<Map<String, dynamic>> filteredStudents = [];
   Map<String, dynamic>? selectedStudent;
   String feeType = "Frais de l'État";
   String month = '';
@@ -29,6 +30,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   
   bool isSemester = false;
   String selectedPeriod = '';
+  String _selectedCycle = 'all'; // 'all', 'primaire', 'secondaire'
   
   final List<String> months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -37,6 +39,12 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   
   final List<int> years = [2023, 2024, 2025, 2026, 2027];
   Map<String, List<String>> paidMonthsByStudent = {};
+
+  final List<Map<String, dynamic>> _cycles = [
+    {'id': 'all', 'name': 'Tous', 'icon': Icons.all_inclusive, 'color': Color(0xFF6366F1)},
+    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': Color(0xFF10B981)},
+    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': Color(0xFF8B5CF6)},
+  ];
 
   @override
   void initState() {
@@ -79,15 +87,20 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       
       final studentsSnapshot = await studentQuery.get();
       
-      students = studentsSnapshot.docs.map((doc) {
+      allStudents = studentsSnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return {
           'firestoreId': doc.id,
           'fullName': data['fullName'] ?? '',
           'className': data['className'] ?? '',
+          'classCycleType': data['classCycleType'] ?? 'primaire',
+          'sectionName': data['sectionName'],
           'schoolId': data['schoolId'],
         };
       }).toList();
+      
+      // Filtrer initialement
+      _filterStudentsByCycle();
       
       // 2. Charger les paiements existants pour vérifier les mois déjà payés
       Query paymentQuery = FirebaseFirestore.instance.collection('payments');
@@ -122,7 +135,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         month = widget.payment!['month']?.toString() ?? '';
         year = widget.payment!['year'] ?? DateTime.now().year;
         
-        selectedStudent = students.firstWhere(
+        selectedStudent = filteredStudents.firstWhere(
           (s) => s['firestoreId'] == widget.payment!['studentFirestoreId'],
           orElse: () => {},
         );
@@ -143,6 +156,25 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
     } finally {
       setState(() => loading = false);
     }
+  }
+
+  void _filterStudentsByCycle() {
+    setState(() {
+      if (_selectedCycle == 'all') {
+        filteredStudents = List.from(allStudents);
+      } else {
+        filteredStudents = allStudents.where((student) {
+          final studentCycle = student['classCycleType'] ?? 'primaire';
+          return studentCycle == _selectedCycle;
+        }).toList();
+      }
+      
+      // Réinitialiser la sélection si l'étudiant n'est plus dans la liste filtrée
+      if (selectedStudent != null && 
+          !filteredStudents.any((s) => s['firestoreId'] == selectedStudent!['firestoreId'])) {
+        selectedStudent = null;
+      }
+    });
   }
 
   void _showSnackBar(String message, Color color) {
@@ -170,54 +202,68 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   }
 
   /// 🔥 Sauvegarder le paiement directement dans Firestore
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || selectedStudent == null) return;
+ Future<void> _save() async {
+  if (!_formKey.currentState!.validate() || selectedStudent == null) return;
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final schoolId = auth.currentSchoolId;
+  final auth = Provider.of<AuthProvider>(context, listen: false);
+  final String? schoolId = auth.currentSchoolId;  // 🔥 String?
 
-    if (widget.payment == null && _isAlreadyPaid()) {
-      final confirmed = await _showAlreadyPaidDialog();
-      if (!confirmed) return;
-    }
-
-    final monthForDb = isSemester ? selectedPeriod : selectedPeriod;
-    final monthNumber = _getMonthNumber(monthForDb);
-    
-    final paymentData = {
-      'studentFirestoreId': selectedStudent!['firestoreId'],
-      'fullName': selectedStudent!['fullName'],
-      'className': selectedStudent!['className'],
-      'month': monthNumber,
-      'monthName': monthForDb,
-      'year': year,
-      'feeType': feeType,
-      'amount': double.tryParse(amountController.text) ?? 0.0,
-      'paymentDate': FieldValue.serverTimestamp(),
-      'schoolId': schoolId,
-      'status': 'paid',
-    };
-
-    try {
-      if (widget.payment == null) {
-        await FirebaseFirestore.instance.collection('payments').add(paymentData);
-        await db.addLog("Ajout paiement: ${selectedStudent!['fullName']} - $monthForDb $year", schoolId: schoolId);
-        _showSnackBar("Paiement ajouté avec succès", const Color(0xFF10B981));
-      } else {
-        if (widget.firestoreId != null) {
-          await FirebaseFirestore.instance
-              .collection('payments')
-              .doc(widget.firestoreId)
-              .update(paymentData);
-          await db.addLog("Modification paiement: ${selectedStudent!['fullName']}", schoolId: schoolId);
-          _showSnackBar("Paiement modifié avec succès", const Color(0xFF10B981));
-        }
-      }
-      Navigator.pop(context, true);
-    } catch (e) {
-      _showSnackBar("Erreur: $e", const Color(0xFFEF4444));
-    }
+  // 🔥 Vérification que schoolId n'est pas null
+  if (schoolId == null) {
+    _showSnackBar("Erreur: École non identifiée", const Color(0xFFEF4444));
+    return;
   }
+
+  if (widget.payment == null && _isAlreadyPaid()) {
+    final confirmed = await _showAlreadyPaidDialog();
+    if (!confirmed) return;
+  }
+
+  final monthForDb = isSemester ? selectedPeriod : selectedPeriod;
+  final monthNumber = _getMonthNumber(monthForDb);
+  
+  final paymentData = {
+    'studentFirestoreId': selectedStudent!['firestoreId'],
+    'fullName': selectedStudent!['fullName'],
+    'className': selectedStudent!['className'],
+    'classCycleType': selectedStudent!['classCycleType'] ?? 'primaire',
+    'sectionName': selectedStudent!['sectionName'],
+    'month': monthNumber,
+    'monthName': monthForDb,
+    'year': year,
+    'feeType': feeType,
+    'amount': double.tryParse(amountController.text) ?? 0.0,
+    'paymentDate': FieldValue.serverTimestamp(),
+    'schoolId': schoolId,  // 🔥 String
+    'status': 'paid',
+  };
+
+  try {
+   if (widget.payment == null) {
+  await FirebaseFirestore.instance.collection('payments').add(paymentData);
+  
+  // Convertir String? en int? si addLog attend int?
+  final int? schoolIdInt = int.tryParse(schoolId ?? '');
+  await db.addLog("Ajout paiement: ${selectedStudent!['fullName']} - $monthForDb $year", schoolId: schoolIdInt);
+  _showSnackBar("Paiement ajouté avec succès", const Color(0xFF10B981));
+}else {
+   if (widget.firestoreId != null) {
+  await FirebaseFirestore.instance
+      .collection('payments')
+      .doc(widget.firestoreId)
+      .update(paymentData);
+  
+  // Convertir String? en int? si addLog attend int?
+  final int? schoolIdInt = int.tryParse(schoolId ?? '');
+  await db.addLog("Modification paiement: ${selectedStudent!['fullName']}", schoolId: schoolIdInt);
+  _showSnackBar("Paiement modifié avec succès", const Color(0xFF10B981));
+}
+    }
+    Navigator.pop(context, true);
+  } catch (e) {
+    _showSnackBar("Erreur: $e", const Color(0xFFEF4444));
+  }
+}
 
   Future<bool> _showAlreadyPaidDialog() async {
     return await showDialog<bool>(
@@ -252,6 +298,53 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         ],
       ),
     ) ?? false;
+  }
+
+  Widget _buildCycleSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: _cycles.map((cycle) {
+          final isSelected = _selectedCycle == cycle['id'];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedCycle = cycle['id'];
+                  _filterStudentsByCycle();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isSelected ? cycle['color'] : Colors.transparent,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(cycle['icon'], color: isSelected ? Colors.white : cycle['color'], size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      cycle['name'],
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : cycle['color'],
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   Widget _buildPeriodSelector() {
@@ -463,13 +556,50 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
+                            // Sélecteur de cycle
+                            _buildCycleSelector(),
+                            const SizedBox(height: 12),
                             DropdownButtonFormField<Map<String, dynamic>>(
                               value: selectedStudent,
-                              hint: const Text("Choisir l'élève"),
-                              items: students.map((s) {
+                              hint: filteredStudents.isEmpty 
+                                  ? Text(_selectedCycle == 'all' 
+                                      ? "Aucun étudiant disponible" 
+                                      : "Aucun étudiant en $_selectedCycle")
+                                  : const Text("Choisir l'élève"),
+                              items: filteredStudents.map((s) {
+                                final isSecondary = s['classCycleType'] == 'secondaire';
                                 return DropdownMenuItem(
                                   value: s,
-                                  child: Text("${s['fullName']} - ${s['className']}"),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s['fullName'],
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            isSecondary ? Icons.school : Icons.abc,
+                                            size: 12,
+                                            color: isSecondary ? Colors.purple : Colors.green,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            s['className'],
+                                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                          ),
+                                          if (isSecondary && s['sectionName'] != null && s['sectionName'].isNotEmpty) ...[
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              ' - ${s['sectionName']}',
+                                              style: TextStyle(fontSize: 11, color: Colors.purple[600]),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 );
                               }).toList(),
                               onChanged: (v) {

@@ -15,20 +15,27 @@ class StaffService {
   // ==================== GESTION DU PERSONNEL ====================
 
   /// Ajouter un membre du personnel
-  Future<int> addStaff(StaffModel staff, int schoolId) async {
+  Future<int> addStaff(StaffModel staff, String schoolId) async {
     try {
-      final id = await _dbHelper.addStaff(staff);
-      staff.id = id;
+      // Créer une copie du staff avec le schoolId
+      final staffWithSchoolId = staff.copyWith(
+        schoolId: schoolId,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      
+      final id = await _dbHelper.addStaff(staffWithSchoolId);
+      staffWithSchoolId.id = id;
       
       await _statsService.addSystemLog(
         action: 'staff_add',
-        description: 'Ajout du personnel: ${staff.fullName} (${staff.position})',
+        description: 'Ajout du personnel: ${staffWithSchoolId.fullName} (${staffWithSchoolId.position})',
         level: 'info',
         schoolId: schoolId,
       );
       
       // Synchronisation Firebase
-      await syncStaffToFirestore(staff, schoolId.toString());
+      await syncStaffToFirestore(staffWithSchoolId, schoolId);
       
       return id;
     } catch (e) {
@@ -38,22 +45,26 @@ class StaffService {
   }
 
   /// Mettre à jour un membre du personnel
-  Future<void> updateStaff(int id, StaffModel staff, int schoolId) async {
+  Future<void> updateStaff(int id, StaffModel staff, String schoolId) async {
     try {
-      await _dbHelper.updateStaff(id, staff);
+      final updatedStaff = staff.copyWith(
+        updatedAt: DateTime.now(),
+      );
+      
+      await _dbHelper.updateStaff(id, updatedStaff);
       
       await _statsService.addSystemLog(
         action: 'staff_update',
-        description: 'Modification du personnel: ${staff.fullName}',
+        description: 'Modification du personnel: ${updatedStaff.fullName}',
         level: 'info',
         schoolId: schoolId,
       );
       
       // Synchronisation Firebase
-      if (staff.firestoreId != null) {
-        await updateStaffInFirestore(staff.firestoreId!, staff);
+      if (updatedStaff.firestoreId != null && updatedStaff.firestoreId!.isNotEmpty) {
+        await updateStaffInFirestore(updatedStaff.firestoreId!, updatedStaff);
       } else {
-        await syncStaffToFirestore(staff, schoolId.toString());
+        await syncStaffToFirestore(updatedStaff, schoolId);
       }
     } catch (e) {
       print('Erreur modification personnel: $e');
@@ -62,10 +73,10 @@ class StaffService {
   }
 
   /// Supprimer un membre du personnel
-  Future<void> deleteStaff(int id, String name, int schoolId) async {
+  Future<void> deleteStaff(int id, String name, String schoolId) async {
     try {
       final staff = await _dbHelper.getStaffById(id);
-      if (staff != null && staff.firestoreId != null) {
+      if (staff != null && staff.firestoreId != null && staff.firestoreId!.isNotEmpty) {
         await deleteStaffFromFirestore(staff.firestoreId!);
       }
       
@@ -77,6 +88,8 @@ class StaffService {
         level: 'warning',
         schoolId: schoolId,
       );
+      
+      print('✅ Personnel supprimé: $name');
     } catch (e) {
       print('Erreur suppression personnel: $e');
       throw e;
@@ -84,13 +97,33 @@ class StaffService {
   }
 
   /// Récupérer tout le personnel d'une école
-  Future<List<StaffModel>> getStaffBySchool(int schoolId) async {
-    return await _dbHelper.getStaffBySchool(schoolId);
+  Future<List<StaffModel>> getStaffBySchool(String schoolId) async {
+    try {
+      return await _dbHelper.getStaffBySchool(schoolId);
+    } catch (e) {
+      print('Erreur récupération personnel par école: $e');
+      return [];
+    }
   }
 
   /// Récupérer tout le personnel (Super Admin)
   Future<List<StaffModel>> getAllStaff() async {
-    return await _dbHelper.getAllStaff();
+    try {
+      return await _dbHelper.getAllStaff();
+    } catch (e) {
+      print('Erreur récupération tout le personnel: $e');
+      return [];
+    }
+  }
+
+  /// Récupérer un personnel par son ID
+  Future<StaffModel?> getStaffById(int id) async {
+    try {
+      return await _dbHelper.getStaffById(id);
+    } catch (e) {
+      print('Erreur récupération personnel par ID: $e');
+      return null;
+    }
   }
 
   // ==================== SYNCHRONISATION FIREBASE ====================
@@ -101,6 +134,7 @@ class StaffService {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
 
+      // Générer un ID Firestore
       final docRef = _firestore.collection('staff').doc();
       final staffData = {
         'fullName': staff.fullName,
@@ -116,6 +150,7 @@ class StaffService {
         'localId': staff.id,
         'createdBy': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       };
 
       await docRef.set(staffData);
@@ -162,17 +197,34 @@ class StaffService {
   Future<void> syncAllStaffToFirestore(String schoolId) async {
     try {
       print('🔄 Synchronisation du personnel vers Firestore...');
-      final staffList = await getStaffBySchool(int.parse(schoolId));
       
+      if (schoolId.isEmpty) {
+        print('⚠️ School ID est vide, synchronisation ignorée');
+        return;
+      }
+      
+      final staffList = await getStaffBySchool(schoolId);
+      
+      if (staffList.isEmpty) {
+        print('📋 Aucun personnel à synchroniser');
+        return;
+      }
+      
+      int syncedCount = 0;
       for (var staff in staffList) {
-        if (staff.firestoreId == null) {
-          await syncStaffToFirestore(staff, schoolId);
-        } else {
-          await updateStaffInFirestore(staff.firestoreId!, staff);
+        try {
+          if (staff.firestoreId == null || staff.firestoreId!.isEmpty) {
+            await syncStaffToFirestore(staff, schoolId);
+          } else {
+            await updateStaffInFirestore(staff.firestoreId!, staff);
+          }
+          syncedCount++;
+        } catch (e) {
+          print('❌ Erreur synchronisation pour ${staff.fullName}: $e');
         }
       }
 
-      print('✅ Synchronisation du personnel terminée: ${staffList.length}');
+      print('✅ Synchronisation terminée: $syncedCount/${staffList.length} employés');
     } catch (e) {
       print('❌ Erreur synchronisation personnel: $e');
       throw e;
@@ -183,42 +235,153 @@ class StaffService {
   Future<void> syncStaffFromFirestore(String schoolId) async {
     try {
       print('📥 Synchronisation du personnel depuis Firestore...');
+      
+      if (schoolId.isEmpty) {
+        print('⚠️ School ID est vide, synchronisation ignorée');
+        return;
+      }
+      
       final snapshot = await _firestore
           .collection('staff')
           .where('schoolId', isEqualTo: schoolId)
           .get();
 
+      int addedCount = 0;
+      int updatedCount = 0;
+
       for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final staff = StaffModel(
-          id: data['localId'],
-          fullName: data['fullName'] ?? '',
-          position: data['position'] ?? '',
-          phone: data['phone'],
-          email: data['email'],
-          address: data['address'],
-          hireDate: data['hireDate'] != null ? DateTime.parse(data['hireDate']) : DateTime.now(),
-          salary: data['salary'] ?? 0.0,
-          photoUrl: data['photoUrl'],
-          isActive: data['isActive'] ?? true,
-          schoolId: data['schoolId'] ?? 0,
-          firestoreId: doc.id,
-        );
-        
-        final existing = await _dbHelper.getStaffById(staff.id!);
-        if (existing == null) {
-          await _dbHelper.addStaff(staff);
-          print('  ✅ Personnel ajouté localement: ${staff.fullName}');
-        } else {
-          await _dbHelper.updateStaff(staff.id!, staff);
-          print('  🔄 Personnel mis à jour localement: ${staff.fullName}');
+        try {
+          final data = doc.data();
+          
+          // Vérifier que les données nécessaires existent
+          if (data['localId'] == null) {
+            print('⚠️ Personnel sans localId ignoré: ${doc.id}');
+            continue;
+          }
+          
+          final staff = StaffModel(
+            id: data['localId'],
+            fullName: data['fullName'] ?? '',
+            position: data['position'] ?? '',
+            phone: data['phone'],
+            email: data['email'],
+            address: data['address'],
+            hireDate: data['hireDate'] != null 
+                ? DateTime.parse(data['hireDate']) 
+                : DateTime.now(),
+            salary: (data['salary'] ?? 0.0).toDouble(),
+            photoUrl: data['photoUrl'],
+            isActive: data['isActive'] ?? true,
+            schoolId: data['schoolId'] ?? schoolId,
+            firestoreId: doc.id,
+            createdAt: data['createdAt'] != null 
+                ? (data['createdAt'] as Timestamp).toDate() 
+                : null,
+            updatedAt: data['updatedAt'] != null 
+                ? (data['updatedAt'] as Timestamp).toDate() 
+                : null,
+          );
+          
+          final existing = await _dbHelper.getStaffById(staff.id!);
+          if (existing == null) {
+            await _dbHelper.addStaff(staff);
+            addedCount++;
+            print('  ✅ Personnel ajouté localement: ${staff.fullName}');
+          } else {
+            await _dbHelper.updateStaff(staff.id!, staff);
+            updatedCount++;
+            print('  🔄 Personnel mis à jour localement: ${staff.fullName}');
+          }
+        } catch (e) {
+          print('❌ Erreur traitement document ${doc.id}: $e');
         }
       }
 
-      print('✅ Synchronisation du personnel depuis Firestore terminée: ${snapshot.docs.length}');
+      print('✅ Synchronisation terminée: +$addedCount ajoutés, $updatedCount mis à jour (total: ${snapshot.docs.length})');
     } catch (e) {
       print('❌ Erreur synchronisation personnel depuis Firestore: $e');
       throw e;
+    }
+  }
+
+  /// Supprimer tout le personnel d'une école (utile pour la réinitialisation)
+  Future<void> deleteAllStaffForSchool(String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      
+      for (var staff in staffList) {
+        if (staff.firestoreId != null && staff.firestoreId!.isNotEmpty) {
+          await deleteStaffFromFirestore(staff.firestoreId!);
+        }
+        await _dbHelper.deleteStaff(staff.id!);
+      }
+      
+      print('🗑️ Tous les personnels supprimés pour l\'école: $schoolId (${staffList.length})');
+    } catch (e) {
+      print('❌ Erreur suppression masse personnel: $e');
+      throw e;
+    }
+  }
+
+  /// Vérifier si un personnel existe déjà
+  Future<bool> staffExists(String fullName, String position, String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      return staffList.any((staff) => 
+        staff.fullName.toLowerCase() == fullName.toLowerCase() && 
+        staff.position == position
+      );
+    } catch (e) {
+      print('Erreur vérification existence personnel: $e');
+      return false;
+    }
+  }
+
+  /// Compter le nombre de personnel par école
+  Future<int> countStaffBySchool(String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      return staffList.length;
+    } catch (e) {
+      print('Erreur comptage personnel: $e');
+      return 0;
+    }
+  }
+
+  /// Compter le nombre de personnel actif par école
+  Future<int> countActiveStaffBySchool(String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      return staffList.where((staff) => staff.isActive).length;
+    } catch (e) {
+      print('Erreur comptage personnel actif: $e');
+      return 0;
+    }
+  }
+
+  /// Récupérer le personnel par poste
+  Future<List<StaffModel>> getStaffByPosition(String position, String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      return staffList.where((staff) => staff.position == position).toList();
+    } catch (e) {
+      print('Erreur récupération personnel par poste: $e');
+      return [];
+    }
+  }
+
+  /// Rechercher du personnel par nom
+  Future<List<StaffModel>> searchStaff(String query, String schoolId) async {
+    try {
+      final staffList = await getStaffBySchool(schoolId);
+      return staffList.where((staff) => 
+        staff.fullName.toLowerCase().contains(query.toLowerCase()) ||
+        staff.position.toLowerCase().contains(query.toLowerCase()) ||
+        (staff.phone?.contains(query) ?? false)
+      ).toList();
+    } catch (e) {
+      print('Erreur recherche personnel: $e');
+      return [];
     }
   }
 }

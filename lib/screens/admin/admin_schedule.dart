@@ -7,6 +7,16 @@ import '../../services/db_helper.dart';
 import '../../models/class_model.dart';
 import '../../providers/auth_provider.dart';
 
+// ===================== PALETTE / THEME HELPERS =====================
+class _AppColors {
+  static const Color primary = Color(0xFF1E3A8A);
+  static const Color primaryLight = Color(0xFF3B5BDB);
+  static const Color background = Color(0xFFF4F6FB);
+  static const Color cardBorder = Color(0xFFE6E9F2);
+  static const Color textDark = Color(0xFF1F2937);
+  static const Color textMuted = Color(0xFF6B7280);
+}
+
 class AdminSchedule extends StatefulWidget {
   final String professorFirestoreId;
   final String professorName;
@@ -64,7 +74,6 @@ class _AdminScheduleState extends State<AdminSchedule>
     super.dispose();
   }
 
-  /// 🔥 Charger les horaires et classes depuis Firestore
   Future<void> _loadDataFromFirestore() async {
     setState(() => _loading = true);
 
@@ -72,7 +81,6 @@ class _AdminScheduleState extends State<AdminSchedule>
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      // Charger les horaires du professeur
       final schedulesSnapshot = await FirebaseFirestore.instance
           .collection('schedules')
           .where('professorFirestoreId', isEqualTo: widget.professorFirestoreId)
@@ -94,7 +102,6 @@ class _AdminScheduleState extends State<AdminSchedule>
         });
       }
       
-      // Charger les classes disponibles
       Query classQuery = FirebaseFirestore.instance.collection('classes');
       if (!auth.isSuperAdmin && schoolId != null) {
         classQuery = classQuery.where('schoolId', isEqualTo: schoolId);
@@ -168,9 +175,7 @@ class _AdminScheduleState extends State<AdminSchedule>
 
   void _showClassSelectionDialog() {
     if (_availableClasses.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucune classe disponible'), backgroundColor: Color(0xFFEF4444)),
-      );
+      _showSnackBar('Aucune classe disponible', const Color(0xFFEF4444));
       return;
     }
 
@@ -198,7 +203,7 @@ class _AdminScheduleState extends State<AdminSchedule>
                       decoration: BoxDecoration(
                         color: isSelected ? const Color(0xFF10B981).withOpacity(0.1) : Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isSelected ? const Color(0xFF10B981) : Colors.grey[200]!),
+                        border: Border.all(color: isSelected ? const Color(0xFF10B981) : _AppColors.cardBorder),
                       ),
                       child: ListTile(
                         leading: Radio<String>(
@@ -212,15 +217,20 @@ class _AdminScheduleState extends State<AdminSchedule>
                           },
                           activeColor: const Color(0xFF10B981),
                         ),
-                        title: Text(cls.className, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
-                        subtitle: Text('Niveau: ${cls.level}'),
+                        title: Text(cls.className, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, color: _AppColors.textDark)),
+                        subtitle: Text('Niveau: ${cls.level}', style: TextStyle(color: _AppColors.textMuted)),
                       ),
                     );
                   },
                 ),
               ),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(foregroundColor: _AppColors.textMuted),
+                  child: const Text('Annuler'),
+                ),
                 ElevatedButton(
                   onPressed: selectedClassFirestoreId == null
                       ? null
@@ -228,7 +238,12 @@ class _AdminScheduleState extends State<AdminSchedule>
                           Navigator.pop(context);
                           await _saveScheduleWithClass(selectedClassFirestoreId!, selectedClassName!);
                         },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                   child: const Text('Enregistrer'),
                 ),
               ],
@@ -239,7 +254,6 @@ class _AdminScheduleState extends State<AdminSchedule>
     );
   }
 
-  /// 🔥 Sauvegarder l'horaire dans Firestore
   Future<void> _saveScheduleWithClass(String classFirestoreId, String className) async {
     final startStr = '${_startTime.hour}:${_startTime.minute.toString().padLeft(2, '0')}';
     final endStr = '${_endTime.hour}:${_endTime.minute.toString().padLeft(2, '0')}';
@@ -308,7 +322,6 @@ class _AdminScheduleState extends State<AdminSchedule>
     setState(() => _isEditing = true);
   }
 
-  /// 🔥 Supprimer l'horaire de Firestore
   Future<void> _deleteSchedule(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -316,11 +329,21 @@ class _AdminScheduleState extends State<AdminSchedule>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Confirmation', style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text('Voulez-vous vraiment supprimer cet horaire ?'),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: _AppColors.textMuted),
+            child: const Text('Annuler'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             child: const Text('Supprimer'),
           ),
         ],
@@ -341,7 +364,13 @@ class _AdminScheduleState extends State<AdminSchedule>
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -360,25 +389,59 @@ class _AdminScheduleState extends State<AdminSchedule>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _AppColors.background,
       appBar: AppBar(
-        title: Text('Horaire - ${widget.professorName}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.grey[800],
         elevation: 0,
+        title: Text(
+          'Horaire - ${widget.professorName}',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 19, letterSpacing: 0.2),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_AppColors.primary, _AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadDataFromFirestore),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            child: IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: "Actualiser",
+              onPressed: _loadDataFromFirestore,
+            ),
+          ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981))))
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(_AppColors.primary),
+              ),
+            )
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // Formulaire d'ajout
+                  const SizedBox(height: 16),
+
+                  // Formulaire d'ajout/modification
                   Container(
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _AppColors.cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Form(
@@ -388,20 +451,54 @@ class _AdminScheduleState extends State<AdminSchedule>
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(color: (_isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                                  child: Icon(_isEditing ? Icons.edit : Icons.add, color: _isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981), size: 24),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: (_isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    _isEditing ? Icons.edit_rounded : Icons.add_rounded,
+                                    color: _isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                    size: 24,
+                                  ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(child: Text(_isEditing ? 'Modifier l\'horaire' : 'Ajouter un horaire', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    _isEditing ? 'Modifier l\'horaire' : 'Ajouter un horaire',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark),
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 20),
 
                             DropdownButtonFormField<String>(
                               value: _selectedDay,
-                              decoration: InputDecoration(labelText: 'Jour *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)), prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF10B981)), filled: true, fillColor: Colors.white),
-                              items: _days.map((day) => DropdownMenuItem(value: day, child: Row(children: [Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, color: _getDayColor(day))), const SizedBox(width: 8), Text(day)]))).toList(),
+                              decoration: InputDecoration(
+                                labelText: 'Jour *',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                prefixIcon: Icon(Icons.calendar_today_rounded, color: const Color(0xFF10B981)),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
+                              items: _days.map((day) => DropdownMenuItem(
+                                value: day,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _getDayColor(day),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(day, style: TextStyle(color: _AppColors.textDark)),
+                                  ],
+                                ),
+                              )).toList(),
                               onChanged: (value) => setState(() => _selectedDay = value!),
                             ),
                             const SizedBox(height: 12),
@@ -411,9 +508,19 @@ class _AdminScheduleState extends State<AdminSchedule>
                                 Expanded(
                                   child: InkWell(
                                     onTap: () => _pickTime(true),
+                                    borderRadius: BorderRadius.circular(14),
                                     child: InputDecorator(
-                                      decoration: InputDecoration(labelText: 'Heure début *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)), prefixIcon: const Icon(Icons.access_time, color: Color(0xFF10B981)), filled: true, fillColor: Colors.white),
-                                      child: Text(_startTime.format(context), style: const TextStyle(fontSize: 16)),
+                                      decoration: InputDecoration(
+                                        labelText: 'Heure début *',
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                        prefixIcon: Icon(Icons.access_time_rounded, color: const Color(0xFF10B981)),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                      ),
+                                      child: Text(
+                                        _startTime.format(context),
+                                        style: TextStyle(fontSize: 16, color: _AppColors.textDark),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -421,9 +528,19 @@ class _AdminScheduleState extends State<AdminSchedule>
                                 Expanded(
                                   child: InkWell(
                                     onTap: () => _pickTime(false),
+                                    borderRadius: BorderRadius.circular(14),
                                     child: InputDecorator(
-                                      decoration: InputDecoration(labelText: 'Heure fin *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)), prefixIcon: const Icon(Icons.access_time, color: Color(0xFF10B981)), filled: true, fillColor: Colors.white),
-                                      child: Text(_endTime.format(context), style: const TextStyle(fontSize: 16)),
+                                      decoration: InputDecoration(
+                                        labelText: 'Heure fin *',
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                        prefixIcon: Icon(Icons.access_time_rounded, color: const Color(0xFF10B981)),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                      ),
+                                      child: Text(
+                                        _endTime.format(context),
+                                        style: TextStyle(fontSize: 16, color: _AppColors.textDark),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -433,14 +550,26 @@ class _AdminScheduleState extends State<AdminSchedule>
 
                             TextFormField(
                               controller: _subjectController,
-                              decoration: InputDecoration(labelText: 'Matière *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)), prefixIcon: const Icon(Icons.book, color: Color(0xFF10B981)), filled: true, fillColor: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Matière *',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                prefixIcon: Icon(Icons.book_rounded, color: const Color(0xFF10B981)),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
                               validator: (value) => value!.isEmpty ? 'Champ requis' : null,
                             ),
                             const SizedBox(height: 12),
 
                             TextFormField(
                               controller: _roomController,
-                              decoration: InputDecoration(labelText: 'Salle', border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)), prefixIcon: const Icon(Icons.location_on, color: Color(0xFF10B981)), filled: true, fillColor: Colors.white),
+                              decoration: InputDecoration(
+                                labelText: 'Salle',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                prefixIcon: Icon(Icons.location_on_rounded, color: const Color(0xFF10B981)),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
                             ),
                             const SizedBox(height: 20),
 
@@ -449,9 +578,15 @@ class _AdminScheduleState extends State<AdminSchedule>
                                 Expanded(
                                   child: ElevatedButton.icon(
                                     onPressed: _saveSchedule,
-                                    icon: Icon(_isEditing ? Icons.update : Icons.save),
+                                    icon: Icon(_isEditing ? Icons.update_rounded : Icons.save_rounded),
                                     label: Text(_isEditing ? 'Modifier' : 'Ajouter'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: _isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _isEditing ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    ),
                                   ),
                                 ),
                                 if (_isEditing) ...[
@@ -459,9 +594,14 @@ class _AdminScheduleState extends State<AdminSchedule>
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: _clearForm,
-                                      icon: const Icon(Icons.clear),
+                                      icon: const Icon(Icons.clear_rounded),
                                       label: const Text('Annuler'),
-                                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: Colors.grey[300]!), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _AppColors.textMuted,
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        side: BorderSide(color: _AppColors.cardBorder),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -473,6 +613,8 @@ class _AdminScheduleState extends State<AdminSchedule>
                     ),
                   ),
 
+                  const SizedBox(height: 20),
+
                   // Barre de recherche et filtre
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -480,103 +622,246 @@ class _AdminScheduleState extends State<AdminSchedule>
                       children: [
                         Expanded(
                           child: TextField(
-                            decoration: InputDecoration(hintText: 'Rechercher...', prefixIcon: const Icon(Icons.search, color: Color(0xFF10B981)), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey[200]!)), filled: true, fillColor: Colors.white),
-                            onChanged: (value) { _searchQuery = value; _filterSchedules(); },
+                            decoration: InputDecoration(
+                              hintText: 'Rechercher...',
+                              hintStyle: TextStyle(color: _AppColors.textMuted),
+                              prefixIcon: Icon(Icons.search_rounded, color: _AppColors.primaryLight),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(color: _AppColors.cardBorder),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(color: _AppColors.primaryLight, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onChanged: (value) {
+                              _searchQuery = value;
+                              _filterSchedules();
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey[200]!)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _AppColors.cardBorder),
+                          ),
                           child: DropdownButton<String>(
                             value: _filterDay,
                             underline: const SizedBox(),
-                            items: [const DropdownMenuItem(value: 'Tous', child: Text('Tous')), ..._days.map((day) => DropdownMenuItem(value: day, child: Text(day)))],
-                            onChanged: (value) { setState(() => _filterDay = value!); _filterSchedules(); },
+                            icon: Icon(Icons.arrow_drop_down_rounded, color: _AppColors.primaryLight),
+                            items: [
+                              const DropdownMenuItem(value: 'Tous', child: Text('Tous', style: TextStyle(color: _AppColors.textDark))),
+                              ..._days.map((day) => DropdownMenuItem(
+                                value: day,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(shape: BoxShape.circle, color: _getDayColor(day)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(day, style: TextStyle(color: _AppColors.textDark)),
+                                  ],
+                                ),
+                              )),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _filterDay = value!);
+                              _filterSchedules();
+                            },
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
                   // Liste des horaires
-                  _filteredSchedules.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(40),
-                            child: Column(
-                              children: [
-                                Icon(Icons.schedule, size: 64, color: Colors.grey[300]),
-                                const SizedBox(height: 16),
-                                Text(_schedules.isEmpty ? 'Aucun horaire programmé' : 'Aucun résultat', style: TextStyle(color: Colors.grey[500])),
+                  if (_filteredSchedules.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: _AppColors.primary.withOpacity(0.06),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.schedule_rounded,
+                                size: 56,
+                                color: _AppColors.primary.withOpacity(0.4),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              _schedules.isEmpty ? 'Aucun horaire programmé' : 'Aucun résultat',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _AppColors.textDark),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _schedules.isEmpty ? 'Commencez par ajouter un horaire' : 'Essayez avec d\'autres critères',
+                              style: TextStyle(fontSize: 13, color: _AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: _filteredSchedules.length,
+                      itemBuilder: (context, index) {
+                        final schedule = _filteredSchedules[index];
+                        final dayColor = _getDayColor(schedule['dayOfWeek']);
+                        return FadeTransition(
+                          opacity: _animationController,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: _AppColors.cardBorder),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
                               ],
                             ),
-                          ),
-                        )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _filteredSchedules.length,
-                          itemBuilder: (context, index) {
-                            final schedule = _filteredSchedules[index];
-                            final dayColor = _getDayColor(schedule['dayOfWeek']);
-                            return FadeTransition(
-                              opacity: _animationController,
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)]),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  leading: Container(width: 50, height: 50, decoration: BoxDecoration(gradient: LinearGradient(colors: [dayColor, dayColor.withOpacity(0.7)]), borderRadius: BorderRadius.circular(14)), child: Center(child: Text(schedule['dayOfWeek'][0], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)))),
-                                  title: Text(schedule['subject'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.class_, size: 14, color: Colors.grey),
-                                          const SizedBox(width: 4),
-                                          Text(schedule['className'] ?? '', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                          const SizedBox(width: 12),
-                                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                                          const SizedBox(width: 4),
-                                          Text('${schedule['startTime']} - ${schedule['endTime']}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                        ],
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 52,
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [dayColor, dayColor.withOpacity(0.7)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                      if (schedule['room']?.isNotEmpty ?? false)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Row(children: [const Icon(Icons.location_on, size: 14, color: Colors.grey), const SizedBox(width: 4), Text(schedule['room'], style: TextStyle(fontSize: 12, color: Colors.grey[600]))]),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        schedule['dayOfWeek'][0],
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
                                         ),
-                                    ],
+                                      ),
+                                    ),
                                   ),
-                                  trailing: Row(
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          schedule['subject'] ?? '',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16,
+                                            color: _AppColors.textDark,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.class_rounded, size: 14, color: _AppColors.textMuted),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              schedule['className'] ?? '',
+                                              style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Icon(Icons.access_time_rounded, size: 14, color: _AppColors.textMuted),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${schedule['startTime']} - ${schedule['endTime']}',
+                                              style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+                                            ),
+                                          ],
+                                        ),
+                                        if (schedule['room']?.isNotEmpty ?? false)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4),
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.location_on_rounded, size: 14, color: _AppColors.textMuted),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  schedule['room'],
+                                                  style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Container(
-                                        decoration: BoxDecoration(color: const Color(0xFFF59E0B).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                        child: IconButton(icon: const Icon(Icons.edit, color: Color(0xFFF59E0B), size: 20), onPressed: () => _editSchedule(schedule)),
+                                      _buildActionButton(
+                                        icon: Icons.edit_rounded,
+                                        color: const Color(0xFFF59E0B),
+                                        onPressed: () => _editSchedule(schedule),
                                       ),
                                       const SizedBox(width: 4),
-                                      Container(
-                                        decoration: BoxDecoration(color: const Color(0xFFEF4444).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                        child: IconButton(icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 20), onPressed: () => _deleteSchedule(schedule['id'])),
+                                      _buildActionButton(
+                                        icon: Icons.delete_rounded,
+                                        color: const Color(0xFFEF4444),
+                                        onPressed: () => _deleteSchedule(schedule['id']),
                                       ),
                                     ],
                                   ),
-                                ),
+                                ],
                               ),
-                            );
-                          },
-                        ),
-                  const SizedBox(height: 20),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildActionButton({required IconData icon, required Color color, required VoidCallback onPressed}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: color, size: 20),
+        onPressed: onPressed,
+        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      ),
     );
   }
 }

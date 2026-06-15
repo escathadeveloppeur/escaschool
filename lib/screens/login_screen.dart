@@ -28,19 +28,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final DBHelper db = DBHelper();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    print('=== LOGIN SCREEN INITIALISÉE ===');
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
     _animationController.forward();
   }
@@ -54,7 +57,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _submit() async {
-    print('🔐 Tentative de connexion...');
     final auth = Provider.of<AuthProvider>(context, listen: false);
     
     setState(() {
@@ -67,14 +69,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = false);
     
     if (!ok) {
-      print('❌ Connexion échouée');
       final userExists = await db.getUserByEmail(_emailCtrl.text.trim());
       
       if (userExists == null) {
-        print('📧 Compte inexistant, proposition création');
         _showAccountNotFoundDialog();
       } else {
-        print('🔑 Mot de passe incorrect');
         setState(() {
           _error = 'Mot de passe incorrect';
         });
@@ -82,7 +81,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
     
-    print('✅ Connexion réussie pour: ${_emailCtrl.text}');
     final user = auth.user!;
     await _redirect(user);
   }
@@ -126,7 +124,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             },
             icon: const Icon(Icons.person_add, size: 18),
             label: const Text('Créer un compte'),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           ),
         ],
       ),
@@ -134,7 +135,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _redirect(User user) async {
-    print('🔄 Redirection vers dashboard pour rôle: ${user.role}');
     Widget? destination;
     
     switch (user.role) {
@@ -161,10 +161,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
     
     if (destination != null) {
-      print('✅ Navigation vers dashboard');
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination!));
     } else {
-      print('❌ Impossible de charger le dashboard');
       setState(() {
         _error = 'Problème lors du chargement du tableau de bord. Contactez l\'administration.';
       });
@@ -172,9 +170,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<Widget?> _getTeacherDashboard(User user) async {
-    print('📚 Chargement dashboard professeur pour user ID: ${user.id}');
     try {
-      // Récupérer le professeur depuis Firestore pour avoir le firestoreId
       final professorsSnapshot = await FirebaseFirestore.instance
           .collection('professors')
           .where('userId', isEqualTo: user.id)
@@ -184,13 +180,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (professorsSnapshot.docs.isEmpty) {
         final professor = await db.getProfessorByUserId(user.id);
         if (professor == null) {
-          print('❌ Profil professeur non trouvé');
           setState(() { _error = 'Profil professeur non trouvé. Contactez l\'administration.'; });
           return null;
         }
         
         if (professor['status'] != 'active') {
-          print('⚠️ Compte professeur désactivé');
           setState(() { _error = 'Votre compte professeur est désactivé.'; });
           return null;
         }
@@ -199,19 +193,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final professorName = professor['fullName'] as String? ?? user.name;
         
         if (professorId <= 0) {
-          print('❌ ID professeur invalide: $professorId');
           setState(() { _error = 'ID professeur invalide.'; });
           return null;
         }
         
-        print('✅ Dashboard professeur chargé (fallback Hive): ID=$professorId, Nom=$professorName');
         return TeacherDashboard(
           professorFirestoreId: professorId.toString(),
           professorName: professorName,
         );
       }
       
-      // Utiliser le firestoreId depuis Firestore
       final professorDoc = professorsSnapshot.docs.first;
       final professorData = professorDoc.data();
       final professorFirestoreId = professorDoc.id;
@@ -219,96 +210,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final professorStatus = professorData['status'] as String? ?? 'active';
       
       if (professorStatus != 'active') {
-        print('⚠️ Compte professeur désactivé');
         setState(() { _error = 'Votre compte professeur est désactivé.'; });
         return null;
       }
       
-      print('✅ Dashboard professeur chargé depuis Firestore: firestoreId=$professorFirestoreId, Nom=$professorName');
       return TeacherDashboard(
         professorFirestoreId: professorFirestoreId,
         professorName: professorName,
       );
       
     } catch (e) {
-      print('❌ Erreur lors du chargement du dashboard professeur: $e');
       return TeacherDashboard(
         professorFirestoreId: '0',
         professorName: user.name.isNotEmpty ? user.name : "Professeur",
       );
     }
-  }
-
-  void _fillTestAccount(String email, String password) {
-    print('📝 Remplissage compte test: $email');
-    setState(() {
-      _emailCtrl.text = email;
-      _passCtrl.text = password;
-      _error = '';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Identifiants copiés: $email'), backgroundColor: const Color(0xFF10B981), duration: const Duration(seconds: 1), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-    );
-  }
-
-  Future<void> _testSync() async {
-    print("\n🧪 === TEST SYNCHRONISATION ===");
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final syncService = SyncService();
-    
-    final hasInternet = await syncService.hasInternet();
-    print("1. Internet: ${hasInternet ? '✅ Connecté' : '❌ Pas de connexion'}");
-    
-    final isFirebaseConnected = await syncService.isFirebaseConnected();
-    print("2. Firebase: ${isFirebaseConnected ? '✅ Connecté' : '❌ Non connecté'}");
-    
-    if (auth.user != null) {
-      print("3. Utilisateur: ${auth.user!.email}, Role: ${auth.user!.role}, School ID: ${auth.currentSchoolId}");
-      if (auth.currentSchoolId != null) {
-        print("4. Synchronisation forcée...");
-        await syncService.forceSync(schoolId: auth.currentSchoolId.toString());
-        print("   ✅ Terminée");
-      }
-      final pendingCount = await syncService.getPendingSyncCount();
-      print("5. Éléments en attente: $pendingCount");
-      final lastSync = await syncService.getLastSyncTimestamp();
-      print("6. Dernière sync: ${lastSync ?? 'Jamais'}");
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Test terminé: Firebase ${isFirebaseConnected ? "OK" : "KO"}'), backgroundColor: isFirebaseConnected ? Colors.green : Colors.orange, duration: const Duration(seconds: 2)),
-      );
-    } else {
-      print("❌ Aucun utilisateur connecté");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez vous connecter d\'abord'), backgroundColor: Colors.orange));
-    }
-    print("=== FIN TEST ===\n");
-  }
-
-  Future<void> _testFirestoreWrite() async {
-    print("\n📝 === TEST ÉCRITURE FIRESTORE ===");
-    try {
-      final user = firebase_auth.FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        print("❌ Aucun utilisateur connecté");
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connectez-vous d\'abord')));
-        return;
-      }
-      
-      final docRef = FirebaseFirestore.instance.collection('test_sync').doc('test_${DateTime.now().millisecondsSinceEpoch}');
-      await docRef.set({
-        'message': 'Test synchronisation',
-        'timestamp': FieldValue.serverTimestamp(),
-        'userId': user.uid,
-        'email': user.email,
-      });
-      
-      print("✅ Document créé: ${docRef.id}");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Document créé: ${docRef.id}'), backgroundColor: Colors.green));
-    } catch (e) {
-      print("❌ Erreur: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
-    }
-    print("=== FIN TEST ===\n");
   }
 
   @override
@@ -327,127 +243,290 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        children: [
-                          Container(width: 80, height: 80, decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.school, size: 45, color: Colors.white)),
-                          const SizedBox(height: 20),
-                          const Text('Ecole+', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const SizedBox(height: 8),
-                          Text('Gestion scolaire intelligente', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8))),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Logo et titre - AVEC IMAGE
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      children: [
+                        // LOGO PERSONNALISÉ
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 20,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(50),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF0F766E), Color(0xFF14B8A6)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(50),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.school,
+                                      size: 50,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'EscaSchool',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Gestion scolaire intelligente',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // Formulaire de connexion
+                  SlideTransition(
+                    position: _slideAnimation,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 30,
+                            offset: const Offset(0, 10),
+                          ),
                         ],
                       ),
-                    ),
-                    
-                    Container(
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))]),
                       child: Padding(
-                        padding: const EdgeInsets.all(28),
+                        padding: const EdgeInsets.all(32),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Connexion', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                            const Text(
+                              'Connexion',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
                             const SizedBox(height: 8),
-                            Text('Connectez-vous à votre espace', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                            const SizedBox(height: 28),
+                            Text(
+                              'Connectez-vous à votre espace',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                            const SizedBox(height: 32),
                             
+                            // Champ email
                             TextFormField(
                               controller: _emailCtrl,
+                              style: const TextStyle(fontSize: 16),
                               decoration: InputDecoration(
                                 labelText: 'Adresse email',
                                 hintText: 'exemple@ecole.com',
-                                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF10B981)),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey[200]!)),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey[200]!)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
-                                filled: true, fillColor: Colors.grey[50],
+                                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF10B981), size: 22),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(color: Colors.grey[200]!),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(color: Colors.grey[200]!),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Color(0xFF10B981), width: 2),
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey[50],
                               ),
                               keyboardType: TextInputType.emailAddress,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 20),
                             
+                            // Champ mot de passe
                             TextFormField(
                               controller: _passCtrl,
                               obscureText: !_isPasswordVisible,
+                              style: const TextStyle(fontSize: 16),
                               decoration: InputDecoration(
                                 labelText: 'Mot de passe',
-                                prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF10B981)),
-                                suffixIcon: IconButton(icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility, color: Colors.grey[400], size: 20), onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible)),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey[200]!)),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey[200]!)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF10B981), width: 2)),
-                                filled: true, fillColor: Colors.grey[50],
+                                prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF10B981), size: 22),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                                    color: Colors.grey[400],
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(color: Colors.grey[200]!),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(color: Colors.grey[200]!),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Color(0xFF10B981), width: 2),
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey[50],
                               ),
                             ),
                             
                             const SizedBox(height: 12),
                             
+                            // Mot de passe oublié
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Contactez l\'administration pour réinitialiser votre mot de passe'), backgroundColor: const Color(0xFFF59E0B), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))),
-                                child: const Text('Mot de passe oublié ?', style: TextStyle(color: Color(0xFF10B981), fontSize: 13)),
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Text('Contactez l\'administration pour réinitialiser votre mot de passe'),
+                                      backgroundColor: const Color(0xFFF59E0B),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'Mot de passe oublié ?',
+                                  style: TextStyle(color: Color(0xFF10B981), fontSize: 13),
+                                ),
                               ),
                             ),
                             
+                            // Message d'erreur
                             if (_error.isNotEmpty)
                               Container(
-                                margin: const EdgeInsets.only(top: 8),
+                                margin: const EdgeInsets.only(top: 16),
                                 padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFEE2E2))),
-                                child: Row(children: [const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20), const SizedBox(width: 10), Expanded(child: Text(_error, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13)))]),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFFEE2E2)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _error,
+                                        style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 28),
                             
+                            // Bouton de connexion
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: (_isLoading || auth.isLoading) ? null : _submit,
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                                child: (_isLoading || auth.isLoading) ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Se connecter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: (_isLoading || auth.isLoading)
+                                    ? const SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Se connecter',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                               ),
                             ),
                             
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 20),
                             
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _testSync,
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.sync, size: 18, color: Colors.white), SizedBox(width: 8), Text('🧪 TEST SYNCHRONISATION', style: TextStyle(fontSize: 14))]),
-                              ),
-                            ),
-                            
-                            const SizedBox(height: 12),
-                            
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: _testFirestoreWrite,
-                                style: OutlinedButton.styleFrom(foregroundColor: Colors.blue, side: const BorderSide(color: Colors.blue), padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 18), SizedBox(width: 8), Text('📝 TEST FIRESTORE', style: TextStyle(fontSize: 14))]),
-                              ),
-                            ),
-                            
-                            const SizedBox(height: 16),
-                            
+                            // Lien vers inscription
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text('Pas encore de compte ?', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                                Text(
+                                  'Pas encore de compte ?',
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                ),
                                 TextButton(
-                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen())),
-                                  child: const Text('Créer un compte', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const RegisterScreen(),
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  ),
+                                  child: const Text(
+                                    'Créer un compte',
+                                    style: TextStyle(
+                                      color: Color(0xFF10B981),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -455,54 +534,38 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                       ),
                     ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    Container(
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.info_outline, color: Colors.white, size: 16)), const SizedBox(width: 10), const Text('Comptes de test', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 14))]),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 10, runSpacing: 10,
-                              children: [
-                                _buildTestBadge('Enseignant', 'teacher@example.com', 'Prof1', Colors.blue),
-                                _buildTestBadge('Étudiant', 'student@example.com', 'student123', Colors.green),
-                                _buildTestBadge('Admin', 'admin@example.com', 'admin123', Colors.purple),
-                                _buildTestBadge('Super Admin', 'super@example.com', 'super123', Colors.orange),
-                                _buildTestBadge('Parent', 'parent1@example.com', 'parent123', Colors.teal),
-                                _buildTestBadge('Personnel', 'staff@example.com', 'staff123', Colors.grey),
-                              ],
-                            ),
-                          ],
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Footer
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      children: [
+                        Text(
+                          '© 2024 EscaSchool | Tous droits réservés',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.6),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Version 1.0.0',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withOpacity(0.4),
+                          ),
+                        ),
+                      ],
                     ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    Text('© 2024 Ecole+ | Tous droits réservés', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTestBadge(String role, String email, String password, Color color) {
-    return GestureDetector(
-      onTap: () => _fillTestAccount(email, password),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.person_outline, size: 12, color: Colors.white), const SizedBox(width: 6), Text(role, style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500))]),
       ),
     );
   }

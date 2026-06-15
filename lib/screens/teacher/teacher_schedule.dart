@@ -10,18 +10,20 @@ import 'teacher_attendance.dart';
 class TeacherScheduleScreen extends StatefulWidget {
   final String teacherName;
   final String professorFirestoreId;
+  final List<String> assignedClasses;
   
   const TeacherScheduleScreen({
     super.key,
     required this.teacherName,
     required this.professorFirestoreId,
+    required this.assignedClasses,
   });
 
   @override
   _TeacherScheduleScreenState createState() => _TeacherScheduleScreenState();
 }
 
-class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
+class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> schedules = [];
   
   CalendarFormat _calendarFormat = CalendarFormat.week;
@@ -29,88 +31,114 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
   DateTime? _selectedDay;
   final Map<DateTime, List<Map<String, dynamic>>> _events = {};
   bool _isLoading = true;
-  
+  late AnimationController _animationController;
+
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _selectedDay = _focusedDay;
     _loadDataFromFirestore();
   }
   
-  /// 🔥 Charger les horaires depuis Firestore
-  Future<void> _loadDataFromFirestore() async {
-    setState(() => _isLoading = true);
-    
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final schoolId = auth.currentSchoolId;
-      
-      Query query = FirebaseFirestore.instance.collection('schedules');
-      query = query.where('professorFirestoreId', isEqualTo: widget.professorFirestoreId);
-      
-      if (schoolId != null && !auth.isSuperAdmin) {
-        query = query.where('schoolId', isEqualTo: schoolId);
-      }
-      
-      final snapshot = await query.get();
-      
-final List<Map<String, dynamic>> schedulesData = [];
-for (var doc in snapshot.docs) {
-  final data = doc.data() as Map<String, dynamic>?;
-  if (data == null) continue;
-  
-  schedulesData.add({
-    'id': doc.id,
-    'professorFirestoreId': data['professorFirestoreId'] ?? '',
-    'classFirestoreId': data['classFirestoreId'] ?? '',
-    'className': data['className'] ?? '',
-    'dayOfWeek': data['dayOfWeek'] ?? '',
-    'startTime': data['startTime'] ?? '',
-    'endTime': data['endTime'] ?? '',
-    'subject': data['subject'] ?? '',
-    'room': data['room'] ?? '',
-    'schoolId': data['schoolId'],
-  });
-}
-      print('✅ ${schedulesData.length} horaires chargés pour prof ${widget.professorFirestoreId}');
-      
-      // Construire les événements pour le calendrier
-      final eventsMap = <DateTime, List<Map<String, dynamic>>>{};
-      final now = DateTime.now();
-      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      
-      for (var schedule in schedulesData) {
-        final dayIndex = _getDayIndex(schedule['dayOfWeek']);
-        if (dayIndex >= 0) {
-          final eventDate = DateTime(
-            startOfWeek.year,
-            startOfWeek.month,
-            startOfWeek.day + dayIndex,
-          );
-          
-          if (!eventsMap.containsKey(eventDate)) {
-            eventsMap[eventDate] = [];
-          }
-          eventsMap[eventDate]!.add(schedule);
-        }
-      }
-      
-      setState(() {
-        schedules = schedulesData;
-        _events.clear();
-        _events.addAll(eventsMap);
-        _isLoading = false;
-      });
-      
-    } catch (e) {
-      print('❌ Erreur chargement horaires: $e');
-      setState(() {
-        schedules = [];
-        _isLoading = false;
-      });
-      _showSnackBar('Erreur de chargement: $e', const Color(0xFFEF4444));
-    }
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
+
+  /// 🔥 Charger les horaires depuis Firestore
+ // lib/screens/teacher/teacher_schedule.dart
+
+Future<void> _loadDataFromFirestore() async {
+  setState(() => _isLoading = true);
+  
+  try {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final schoolId = auth.currentSchoolId;
+    
+    print('\n╔════════════════════════════════════════════════════════════╗');
+    print('║     CHARGEMENT DES HORAIRES - PROFESSEUR                   ║');
+    print('╚════════════════════════════════════════════════════════════╝\n');
+    print('📌 Professeur ID: ${widget.professorFirestoreId}');
+    print('📌 Classes assignées: ${widget.assignedClasses}\n');
+    
+    // Récupérer TOUS les horaires du professeur (sans filtrer par classe d'abord)
+    final schedulesSnapshot = await FirebaseFirestore.instance
+        .collection('schedules')
+        .where('professorFirestoreId', isEqualTo: widget.professorFirestoreId)
+        .get();
+    
+    print('📊 ${schedulesSnapshot.docs.length} horaire(s) trouvé(s) pour le professeur');
+    
+    final List<Map<String, dynamic>> allSchedules = [];
+    
+    for (var doc in schedulesSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final className = data['className'] ?? '';
+      
+      // Vérifier si la classe est dans les classes assignées
+      if (widget.assignedClasses.contains(className)) {
+        allSchedules.add({
+          'id': doc.id,
+          'classFirestoreId': data['classFirestoreId'] ?? '',
+          'className': className,
+          'dayOfWeek': data['dayOfWeek'] ?? '',
+          'startTime': data['startTime'] ?? '',
+          'endTime': data['endTime'] ?? '',
+          'subject': data['subject'] ?? '',
+          'room': data['room'] ?? '',
+          'professorFirestoreId': data['professorFirestoreId'] ?? '',
+          'schoolId': data['schoolId'],
+        });
+        print('   ✅ Ajouté: $className - ${data['subject']} - ${data['dayOfWeek']}');
+      }
+    }
+    
+    print('\n✅ Total horaires chargés: ${allSchedules.length}');
+    
+    // Organiser les événements par date
+    final eventsMap = <DateTime, List<Map<String, dynamic>>>{};
+    final now = DateTime.now();
+    final startOfWeek = DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    
+    for (var schedule in allSchedules) {
+      final dayIndex = _getDayIndex(schedule['dayOfWeek']);
+      if (dayIndex >= 0) {
+        final eventDate = DateTime(
+          startOfWeek.year,
+          startOfWeek.month,
+          startOfWeek.day + dayIndex,
+        );
+        
+        if (!eventsMap.containsKey(eventDate)) {
+          eventsMap[eventDate] = [];
+        }
+        eventsMap[eventDate]!.add(schedule);
+      }
+    }
+    
+    setState(() {
+      schedules = allSchedules;
+      _events.clear();
+      _events.addAll(eventsMap);
+      _isLoading = false;
+    });
+    
+    _animationController.forward(from: 0);
+    
+  } catch (e) {
+    print('❌ Erreur chargement horaires: $e');
+    setState(() {
+      schedules = [];
+      _isLoading = false;
+    });
+    _showSnackBar('Erreur de chargement: $e', const Color(0xFFEF4444));
+  }
+}
   
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -146,10 +174,26 @@ for (var doc in snapshot.docs) {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981))),
+            SizedBox(height: 16),
+            Text('Chargement de l\'emploi du temps...'),
+          ],
+        ),
+      );
+    }
+    
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text('Emploi du temps - ${widget.teacherName}'),
-        backgroundColor: Colors.blue,
+        title: Text('Mon emploi du temps - ${widget.teacherName}'),
+        titleTextStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.grey[800],
         elevation: 0,
         actions: [
           IconButton(
@@ -159,139 +203,152 @@ for (var doc in snapshot.docs) {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+      body: Column(
+        children: [
+          if (auth.currentSchoolId != null && !auth.isSuperAdmin)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-            )
-          : Column(
+              child: Row(
+                children: [
+                  const Icon(Icons.business, size: 18, color: Color(0xFF3B82F6)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'École : ${auth.schoolName ?? auth.currentSchoolId}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
+                  ),
+                ],
+              ),
+            ),
+          
+          // En-tête avec les classes du professeur
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: const Color(0xFF3B82F6).withOpacity(0.1),
+            child: Row(
               children: [
-                if (auth.currentSchoolId != null && !auth.isSuperAdmin)
-                  Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3B82F6).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.business, size: 18, color: Color(0xFF3B82F6)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'École : ${auth.schoolName ?? auth.currentSchoolId}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF3B82F6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Calendrier
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.blue[50],
-                  child: TableCalendar<Map<String, dynamic>>(
-                    firstDay: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDay: DateTime.now().add(const Duration(days: 365)),
-                    focusedDay: _focusedDay,
-                    calendarFormat: _calendarFormat,
-                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                        _focusedDay = focusedDay;
-                      });
-                    },
-                    onFormatChanged: (format) {
-                      setState(() => _calendarFormat = format);
-                    },
-                    onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-                    eventLoader: _getEventsForDay,
-                    calendarStyle: CalendarStyle(
-                      todayDecoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      selectedDecoration: BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                      ),
-                      markerDecoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      markerSize: 6,
-                    ),
-                    headerStyle: const HeaderStyle(
-                      formatButtonVisible: true,
-                      titleCentered: true,
-                    ),
-                  ),
-                ),
-                
-                // Légende rapide
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  color: Colors.blue[50],
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _legendDot(Colors.blue, 'Maths'),
-                      _legendDot(Colors.green, 'Physique'),
-                      _legendDot(Colors.orange, 'Chimie'),
-                      _legendDot(Colors.purple, 'Français'),
-                      _legendDot(Colors.red, 'Anglais'),
-                    ],
-                  ),
-                ),
-                
-                const Divider(height: 1),
-                
-                // Titre du jour
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.grey[50],
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, color: Colors.blue[700], size: 20),
-                      const SizedBox(width: 12),
-                      Text(
-                        _selectedDay != null 
-                          ? _formatDate(_selectedDay!)
-                          : "Aujourd'hui",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[800],
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[100],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${_getEventsForDay(_selectedDay ?? _focusedDay).length} cours',
-                          style: TextStyle(color: Colors.blue[700], fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // Liste des cours
+                Icon(Icons.class_, color: const Color(0xFF3B82F6)),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _buildDaySchedule(),
+                  child: Text(
+                    'Classes: ${widget.assignedClasses.join(", ")}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF3B82F6),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
+          ),
+          
+          // Calendrier
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: const Color(0xFF3B82F6).withOpacity(0.05),
+            child: TableCalendar<Map<String, dynamic>>(
+              firstDay: DateTime.now().subtract(const Duration(days: 365)),
+              lastDay: DateTime.now().add(const Duration(days: 365)),
+              focusedDay: _focusedDay,
+              calendarFormat: _calendarFormat,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _selectedDay = selectedDay;
+                  _focusedDay = focusedDay;
+                });
+              },
+              onFormatChanged: (format) {
+                setState(() => _calendarFormat = format);
+              },
+              onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+              eventLoader: _getEventsForDay,
+              calendarStyle: CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: const BoxDecoration(
+                  color: Color(0xFF3B82F6),
+                  shape: BoxShape.circle,
+                ),
+                markerDecoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                markerSize: 6,
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: true,
+                titleCentered: true,
+              ),
+            ),
+          ),
+          
+          // Légende rapide
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            color: const Color(0xFF3B82F6).withOpacity(0.05),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _legendDot(const Color(0xFF3B82F6), 'Maths'),
+                _legendDot(const Color(0xFF10B981), 'Physique'),
+                _legendDot(const Color(0xFFF59E0B), 'Chimie'),
+                _legendDot(const Color(0xFF8B5CF6), 'Français'),
+                _legendDot(const Color(0xFFEF4444), 'Anglais'),
+              ],
+            ),
+          ),
+          
+          const Divider(height: 1),
+          
+          // Titre du jour
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.grey[50],
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, color: const Color(0xFF3B82F6), size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  _selectedDay != null 
+                    ? _formatDate(_selectedDay!)
+                    : "Aujourd'hui",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF3B82F6),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B82F6).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_getEventsForDay(_selectedDay ?? _focusedDay).length} cours',
+                    style: TextStyle(color: const Color(0xFF3B82F6), fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Liste des cours
+          Expanded(
+            child: _buildDaySchedule(),
+          ),
+        ],
+      ),
     );
   }
   
@@ -329,15 +386,9 @@ for (var doc in snapshot.docs) {
           children: [
             Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
-            Text(
-              "Aucun cours prévu",
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
+            Text("Aucun cours prévu", style: TextStyle(fontSize: 18, color: Colors.grey[600])),
             const SizedBox(height: 8),
-            Text(
-              "Profitez de votre journée !",
-              style: TextStyle(color: Colors.grey[500]),
-            ),
+            Text("Profitez de votre journée !", style: TextStyle(color: Colors.grey[500])),
           ],
         ),
       );
@@ -356,130 +407,84 @@ for (var doc in snapshot.docs) {
         final room = schedule['room'] ?? 'Salle non spécifiée';
         final className = schedule['className'] ?? 'Classe inconnue';
         
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _showClassDetails(schedule),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Heure
-                    Container(
-                      width: 70,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            startTime.split(':')[0],
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[800],
+        return FadeTransition(
+          opacity: _animationController,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8)],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _showClassDetails(schedule),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(startTime.split(':')[0], 
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF3B82F6))),
+                            Text('h${startTime.split(':')[1]}', 
+                              style: TextStyle(fontSize: 12, color: const Color(0xFF3B82F6))),
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4), 
+                              height: 1, width: 30, 
+                              color: const Color(0xFF3B82F6).withOpacity(0.3)
                             ),
-                          ),
-                          Text(
-                            'h${startTime.split(':')[1]}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue[600],
+                            Text(endTime.split(':')[0], 
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: const Color(0xFF3B82F6))),
+                            Text('h${endTime.split(':')[1]}', 
+                              style: TextStyle(fontSize: 10, color: const Color(0xFF3B82F6).withOpacity(0.7))),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.class_, size: 14, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(className, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                              ],
                             ),
-                          ),
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            height: 1,
-                            width: 30,
-                            color: Colors.blue[200],
-                          ),
-                          Text(
-                            endTime.split(':')[0],
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.blue[600],
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(room, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                              ],
                             ),
-                          ),
-                          Text(
-                            'h${endTime.split(':')[1]}',
-                            style: TextStyle(fontSize: 10, color: Colors.blue[400]),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    
-                    const SizedBox(width: 16),
-                    
-                    // Détails du cours
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            subject,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.class_, size: 14, color: Colors.grey[500]),
-                              const SizedBox(width: 4),
-                              Text(
-                                className,
-                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
-                              const SizedBox(width: 4),
-                              Text(
-                                room,
-                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                        ],
+                      Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.1), 
+                          borderRadius: BorderRadius.circular(8)
+                        ),
+                        child: Icon(Icons.arrow_forward_ios, size: 16, color: const Color(0xFF3B82F6)),
                       ),
-                    ),
-                    
-                    // Icône action
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -509,15 +514,19 @@ for (var doc in snapshot.docs) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.school, color: Colors.blue),
-            const SizedBox(width: 8),
-            Text(
-              schedule['subject'],
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(8), 
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.1), 
+                borderRadius: BorderRadius.circular(12)
+              ), 
+              child: Icon(Icons.school, color: const Color(0xFF3B82F6))
             ),
+            const SizedBox(width: 8),
+            Text(schedule['subject'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -537,8 +546,8 @@ for (var doc in snapshot.docs) {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer'),
+            onPressed: () => Navigator.pop(context), 
+            child: const Text('Fermer')
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -561,16 +570,8 @@ for (var doc in snapshot.docs) {
       children: [
         Icon(icon, size: 16, color: Colors.grey[600]),
         const SizedBox(width: 12),
-        SizedBox(
-          width: 70,
-          child: Text(label, style: TextStyle(color: Colors.grey[600])),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-        ),
+        SizedBox(width: 70, child: Text(label, style: TextStyle(color: Colors.grey[600]))),
+        Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500))),
       ],
     );
   }
@@ -601,12 +602,12 @@ for (var doc in snapshot.docs) {
     Navigator.push(
       context,
       MaterialPageRoute(
- builder: (context) => TeacherAttendanceScreen(
-  teacherName: widget.teacherName,
-  professorFirestoreId: widget.professorFirestoreId,
-  assignedClasses: [schedule['className'] ?? ''],
-  assignedSubjects: [schedule['subject']],
-),
+        builder: (context) => TeacherAttendanceScreen(
+          teacherName: widget.teacherName,
+          professorFirestoreId: widget.professorFirestoreId,
+          assignedClasses: [schedule['className'] ?? ''],
+          assignedSubjects: [schedule['subject']],
+        ),
       ),
     );
   }

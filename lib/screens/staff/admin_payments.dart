@@ -20,8 +20,15 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
   TextEditingController searchController = TextEditingController();
   bool loading = true;
   late AnimationController _animationController;
+  String _selectedCycle = 'all'; // 'all', 'primaire', 'secondaire'
   
   Map<String, List<String>> studentPaidMonths = {};
+
+  final List<Map<String, dynamic>> _cycles = [
+    {'id': 'all', 'name': 'Tous', 'icon': Icons.all_inclusive, 'color': Color(0xFF6366F1)},
+    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': Color(0xFF10B981)},
+    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': Color(0xFF8B5CF6)},
+  ];
 
   @override
   void initState() {
@@ -41,7 +48,7 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
     super.dispose();
   }
 
-  /// 🔥 Charger les paiements depuis Firestore (sans orderBy pour éviter l'index)
+  /// 🔥 Charger les paiements depuis Firestore
   Future<void> _loadPaymentsFromFirestore() async {
     setState(() => loading = true);
     try {
@@ -53,7 +60,6 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
         query = query.where('schoolId', isEqualTo: schoolId);
       }
       
-      // ⚠️ Temporairement sans orderBy pour éviter l'erreur d'index
       final snapshot = await query.get();
       
       payments = snapshot.docs.map((doc) {
@@ -63,6 +69,8 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
           'studentFirestoreId': data['studentFirestoreId'] ?? '',
           'fullName': data['fullName'] ?? '',
           'className': data['className'] ?? '',
+          'classCycleType': data['classCycleType'] ?? 'primaire',
+          'sectionName': data['sectionName'],
           'month': data['month'] ?? 0,
           'monthName': data['monthName'] ?? '',
           'year': data['year'] ?? 0,
@@ -78,7 +86,7 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
       // Trier manuellement par date (plus récent en premier)
       payments.sort((a, b) => b['paymentDate'].compareTo(a['paymentDate']));
       
-      filtered = List.from(payments);
+      _filter();
       _updateStudentPaidMonths();
       
       _animationController.forward(from: 0);
@@ -108,18 +116,32 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
   }
 
   void _filter() {
-    final q = searchController.text.trim().toLowerCase();
+    final searchQuery = searchController.text.trim().toLowerCase();
+    
     setState(() {
-      if (q.isEmpty) {
-        filtered = List.from(payments);
-      } else {
-        filtered = payments.where((p) {
-          return (p['fullName'] as String).toLowerCase().contains(q) ||
-                 (p['className'] as String).toLowerCase().contains(q) ||
-                 (p['month'] as int).toString().contains(q) ||
-                 (p['feeType'] as String).toLowerCase().contains(q);
-        }).toList();
-      }
+      filtered = payments.where((payment) {
+        // Filtrer par cycle
+        if (_selectedCycle != 'all') {
+          final paymentCycle = payment['classCycleType'] ?? 'primaire';
+          if (paymentCycle != _selectedCycle) return false;
+        }
+        
+        // Filtrer par recherche
+        if (searchQuery.isNotEmpty) {
+          final fullName = (payment['fullName'] as String).toLowerCase();
+          final className = (payment['className'] as String).toLowerCase();
+          final monthName = (payment['monthName'] as String).toLowerCase();
+          final feeType = (payment['feeType'] as String).toLowerCase();
+          if (!fullName.contains(searchQuery) && 
+              !className.contains(searchQuery) && 
+              !monthName.contains(searchQuery) && 
+              !feeType.contains(searchQuery)) {
+            return false;
+          }
+        }
+        
+        return true;
+      }).toList();
     });
   }
 
@@ -175,6 +197,53 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
     return months[month - 1];
   }
 
+  Widget _buildCycleSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: _cycles.map((cycle) {
+          final isSelected = _selectedCycle == cycle['id'];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedCycle = cycle['id'];
+                  _filter();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isSelected ? cycle['color'] : Colors.transparent,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(cycle['icon'], color: isSelected ? Colors.white : cycle['color'], size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      cycle['name'],
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : cycle['color'],
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -206,6 +275,12 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
                 ],
               ),
             ),
+
+          // Sélecteur de cycle
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _buildCycleSelector(),
+          ),
 
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -311,6 +386,12 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
                               "Aucun paiement",
                               style: TextStyle(fontSize: 16, color: Colors.grey[500]),
                             ),
+                            const SizedBox(height: 8),
+                            if (_selectedCycle != 'all')
+                              Text(
+                                "pour le ${_selectedCycle == 'primaire' ? 'primaire' : 'secondaire'}",
+                                style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                              ),
                           ],
                         ),
                       )
@@ -324,6 +405,7 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
                           final year = p['year'] as int;
                           final isPaid = _hasStudentPaidForMonth(studentId, month, year);
                           final monthName = p['monthName'] as String? ?? _getMonthName(month);
+                          final isSecondary = p['classCycleType'] == 'secondaire';
                           
                           return FadeTransition(
                             opacity: _animationController,
@@ -363,17 +445,84 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
                                     ),
                                   ),
                                 ),
-                                title: Text(
-                                  "${p['fullName']} — ${p['className']}",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                    letterSpacing: -0.3,
-                                  ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        p['fullName'],
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isSecondary 
+                                            ? const Color(0xFF8B5CF6).withOpacity(0.1)
+                                            : const Color(0xFF10B981).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isSecondary ? Icons.school : Icons.abc,
+                                            size: 10,
+                                            color: isSecondary ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            isSecondary ? "Secondaire" : "Primaire",
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w500,
+                                              color: isSecondary ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.class_,
+                                          size: 12,
+                                          color: Colors.grey[500],
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          p['className'],
+                                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                        ),
+                                      ],
+                                    ),
+                                    if (isSecondary && p['sectionName'] != null && p['sectionName'].isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.school,
+                                              size: 12,
+                                              color: Colors.purple[400],
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              "Section: ${p['sectionName']}",
+                                              style: TextStyle(fontSize: 11, color: Colors.purple[600]),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     const SizedBox(height: 4),
                                     Text(
                                       "$monthName $year • ${p['feeType']}",

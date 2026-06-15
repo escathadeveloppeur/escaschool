@@ -1,6 +1,7 @@
-// lib/screens/staff/add_student.dart
+// lib/screens/admin/add_student_screen.dart
 
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,11 +31,16 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   
   List<Map<String, dynamic>> _availableStudentAccounts = [];
   List<Map<String, dynamic>> _availableParentAccounts = [];
-  List<Map<String, dynamic>> _availableClasses = [];
+  List<Map<String, dynamic>> _allClasses = [];
+  List<Map<String, dynamic>> _filteredClasses = [];
+  List<Map<String, dynamic>> _availableSections = [];
   Map<String, dynamic>? _selectedStudentAccount;
   Map<String, dynamic>? _selectedParentAccount;
   Map<String, dynamic>? _selectedClass;
+  Map<String, dynamic>? _selectedSection;
   String _selectedRelation = 'Père';
+  String _selectedGender = 'Masculin';
+  String _selectedCycle = 'primaire';
   
   bool documentsVerified = false;
   String? _generatedQRData;
@@ -42,6 +48,12 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   bool _loadingAccounts = true;
 
   final List<String> _relations = ['Père', 'Mère', 'Tuteur', 'Grand-parent', 'Oncle/Tante', 'Autre'];
+  final List<String> _genders = ['Masculin', 'Féminin'];
+  
+  final List<Map<String, dynamic>> _cycles = [
+    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': const Color(0xFF10B981)},
+    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': const Color(0xFF8B5CF6)},
+  ];
 
   @override
   void initState() {
@@ -55,9 +67,29 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     parentPhoneController = TextEditingController(text: s?['parentPhone'] ?? '');
     addressController = TextEditingController(text: s?['address'] ?? '');
     documentsVerified = s?['documentsVerified'] ?? false;
+    _selectedGender = s?['gender'] ?? 'Masculin';
+    _selectedCycle = s?['classCycleType'] ?? s?['educationLevel'] ?? 'primaire';
     
     _loadAvailableAccounts();
-    _loadAvailableClasses();
+    _loadAllClasses();
+    _loadAvailableSections();
+    
+    if (widget.student != null && widget.student!['className'] != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _filterClassesByCycleAndSection();
+        if (widget.student!['sectionId'] != null) {
+          _selectedSection = _availableSections.firstWhere(
+            (s) => s['id'] == widget.student!['sectionId'],
+            orElse: () => {},
+          );
+        }
+        _selectedClass = _filteredClasses.firstWhere(
+          (c) => c['className'] == widget.student!['className'],
+          orElse: () => {},
+        );
+        setState(() {});
+      });
+    }
   }
 
   @override
@@ -72,7 +104,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     super.dispose();
   }
 
-  /// 🔥 Charger les comptes disponibles (élèves et parents)
   Future<void> _loadAvailableAccounts() async {
     setState(() => _loadingAccounts = true);
     
@@ -80,13 +111,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      // 1. Charger les comptes étudiants existants (rôle 'student')
       final studentsSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'student')
           .get();
       
-      // Récupérer les étudiants déjà associés
       final existingStudentsSnapshot = await FirebaseFirestore.instance
           .collection('students')
           .get();
@@ -107,7 +136,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         }
       }
       
-      // 2. Charger les comptes parents existants (rôle 'parent')
       final parentsSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'parent')
@@ -123,7 +151,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         });
       }
       
-      // Si en mode édition, pré-sélectionner les comptes
       if (widget.student != null) {
         _selectedStudentAccount = _availableStudentAccounts.firstWhere(
           (a) => a['userId'] == widget.student!['userId'],
@@ -145,40 +172,96 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     }
   }
 
-  /// 🔥 Charger les classes de l'école depuis Firestore
-  Future<void> _loadAvailableClasses() async {
+  Future<void> _loadAllClasses() async {
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      Query query = FirebaseFirestore.instance.collection('classes');
-      if (schoolId != null && !auth.isSuperAdmin) {
-        query = query.where('schoolId', isEqualTo: schoolId);
-      }
+      final snapshot = await FirebaseFirestore.instance
+          .collection('classes')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
       
-      final snapshot = await query.get();
-      
-      _availableClasses = snapshot.docs.map((doc) {
+      _allClasses = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return {
           'firestoreId': doc.id,
           'className': data['className'] ?? '',
           'level': data['level'] ?? '',
           'year': data['year'] ?? '',
+          'cycleType': data['cycleType'] ?? 'primaire',
+          'section': data['section'] ?? '',
+          'sectionId': data['sectionId'] ?? '',
         };
       }).toList();
       
-      // Si en mode édition, pré-sélectionner la classe
-      if (widget.student != null && widget.student!['className'] != null) {
-        _selectedClass = _availableClasses.firstWhere(
-          (c) => c['className'] == widget.student!['className'],
-          orElse: () => {},
-        );
-      }
+      _filterClassesByCycleAndSection();
       
-      print('✅ ${_availableClasses.length} classes disponibles');
+      print('✅ ${_allClasses.length} classes disponibles');
     } catch (e) {
       print('❌ Erreur chargement classes: $e');
+    }
+  }
+  
+  /// 🔥 Filtrer les classes selon le cycle ET la section sélectionnée
+  void _filterClassesByCycleAndSection() {
+    setState(() {
+      _filteredClasses = _allClasses.where((classItem) {
+        final classCycle = classItem['cycleType'] ?? 'primaire';
+        
+        // Pour le primaire : pas de section
+        if (classCycle == 'primaire') {
+          return classCycle == _selectedCycle;
+        }
+        
+        // Pour le secondaire : filtrer par section si une section est sélectionnée
+        if (classCycle == 'secondaire') {
+          if (_selectedSection == null) {
+            return false;
+          }
+          return classCycle == _selectedCycle && classItem['section'] == _selectedSection!['name'];
+        }
+        
+        return false;
+      }).toList();
+      
+      _selectedClass = null;
+    });
+  }
+  
+  /// 🔥 Mettre à jour les classes quand la section change
+  void _onSectionChanged(Map<String, dynamic>? section) {
+    setState(() {
+      _selectedSection = section;
+      _filterClassesByCycleAndSection();
+    });
+  }
+
+  Future<void> _loadAvailableSections() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final schoolId = auth.currentSchoolId;
+      
+      if (schoolId == null) return;
+      
+      final snapshot = await FirebaseFirestore.instance
+          .collection('sections')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+      
+      _availableSections = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'name': data['name'] ?? '',
+          'description': data['description'] ?? '',
+          'subjects': data['subjects'] ?? [],
+        };
+      }).toList();
+      
+      print('✅ ${_availableSections.length} sections disponibles');
+    } catch (e) {
+      print('❌ Erreur chargement sections: $e');
     }
   }
 
@@ -188,7 +271,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     );
   }
 
-  /// 🔥 Sauvegarder directement dans Firestore avec liaison des comptes
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
       _showSnackBar("Veuillez remplir tous les champs obligatoires", const Color(0xFFF59E0B));
@@ -214,10 +296,15 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       'userId': _selectedStudentAccount!['userId'],
       'userEmail': _selectedStudentAccount!['email'],
       'fullName': fullNameController.text.trim(),
+      'gender': _selectedGender,
       'className': _selectedClass!['className'],
       'classFirestoreId': _selectedClass!['firestoreId'],
       'classLevel': _selectedClass!['level'],
       'classYear': _selectedClass!['year'],
+      'classCycleType': _selectedClass!['cycleType'],
+      'educationLevel': _selectedClass!['cycleType'],
+      'sectionId': _selectedSection?['id'],
+      'sectionName': _selectedSection?['name'],
       'birthDate': birthDateController.text.trim(),
       'birthPlace': birthPlaceController.text.trim(),
       'fatherName': fatherNameController.text.trim(),
@@ -236,7 +323,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       if (widget.student == null) {
         final docRef = await FirebaseFirestore.instance.collection('students').add(studentData);
         
-        // Créer le lien parent-enfant si un parent est sélectionné
         if (_selectedParentAccount != null) {
           await FirebaseFirestore.instance.collection('parent_student_links').add({
             'parentUserId': _selectedParentAccount!['userId'],
@@ -248,20 +334,20 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
           });
         }
         
-        _generatedQRData = QRService.generateStudentQR(
-          StudentModel(
-            fullName: fullNameController.text.trim(),
-            className: _selectedClass!['className'],
-            birthDate: birthDateController.text.trim(),
-            birthPlace: birthPlaceController.text.trim(),
-            fatherName: fatherNameController.text.trim(),
-            motherName: motherNameController.text.trim(),
-            parentPhone: parentPhoneController.text.trim(),
-            address: addressController.text.trim(),
-          documentsVerified: documentsVerified,
-            schoolId: schoolId ?? 0,
-          )
-        );
+        final qrData = json.encode({
+          'type': 'student_attendance',
+          'studentId': docRef.id,
+          'studentName': fullNameController.text.trim(),
+          'className': _selectedClass!['className'],
+          'classCycleType': _selectedClass!['cycleType'],
+          'sectionName': _selectedSection?['name'],
+          'gender': _selectedGender,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        });
+        
+        setState(() {
+          _generatedQRData = qrData;
+        });
         
         _showSnackBar("Étudiant ajouté avec succès", const Color(0xFF10B981));
       } else {
@@ -283,6 +369,8 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isSecondary = _selectedCycle == 'secondaire';
+    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -299,6 +387,57 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                 key: _formKey,
                 child: Column(
                   children: [
+                    // SECTION SÉLECTION DU CYCLE
+                    _buildSection("Niveau d'études", Icons.school, const Color(0xFF8B5CF6), [
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          children: _cycles.map((cycle) {
+                            final isSelected = _selectedCycle == cycle['id'];
+                            return Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCycle = cycle['id'];
+                                    _selectedSection = null;
+                                    _filterClassesByCycleAndSection();
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? cycle['color'] : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(cycle['icon'], color: isSelected ? Colors.white : cycle['color'], size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        cycle['name'],
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.white : cycle['color'],
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ]),
+                    
+                    const SizedBox(height: 16),
+                    
                     // Section sélection du compte étudiant
                     _buildSection("Compte utilisateur", Icons.account_circle, const Color(0xFF8B5CF6), [
                       DropdownButtonFormField<Map<String, dynamic>>(
@@ -359,37 +498,115 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                     
                     const SizedBox(height: 16),
                     
-                    // Section sélection de la classe (Dropdown au lieu de champ manuel)
-                    _buildSection("Informations scolaires", Icons.school, const Color(0xFF10B981), [
-                      DropdownButtonFormField<Map<String, dynamic>>(
-                        value: _selectedClass,
-                        hint: const Text('Sélectionner une classe *'),
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                          prefixIcon: const Icon(Icons.class_, color: Color(0xFF10B981)),
-                          filled: true,
-                          fillColor: Colors.white,
+                    // Section sélection de la SECTION (pour secondaire)
+                    if (isSecondary) ...[
+                      _buildSection("Section", Icons.school, const Color(0xFF8B5CF6), [
+                        DropdownButtonFormField<Map<String, dynamic>>(
+                          value: _selectedSection,
+                          hint: const Text('Sélectionner une section *'),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            prefixIcon: const Icon(Icons.school, color: Color(0xFF8B5CF6)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: _availableSections.map((section) {
+                            return DropdownMenuItem(
+                              value: section,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(section['name'], style: const TextStyle(fontWeight: FontWeight.w500)),
+                                  if (section['description'] != null && section['description'].isNotEmpty)
+                                    Text(section['description'], style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            _onSectionChanged(value);
+                          },
+                          validator: (value) => isSecondary && value == null ? 'Section requise' : null,
                         ),
-                        items: _availableClasses.map((classItem) {
-                          return DropdownMenuItem(
-                            value: classItem,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(classItem['className'], style: const TextStyle(fontWeight: FontWeight.w500)),
-                                Text('${classItem['level']} • ${classItem['year']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedClass = value;
-                          });
-                        },
-                        validator: (value) => value == null ? 'Classe requise' : null,
-                      ),
-                      if (_availableClasses.isEmpty)
+                      ]),
+                      const SizedBox(height: 16),
+                    ],
+                    
+                    // Section sélection de la CLASSE (filtrée par section)
+                    _buildSection("Classe", Icons.class_, const Color(0xFF10B981), [
+                      if (isSecondary && _selectedSection == null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info, size: 16, color: Color(0xFFF59E0B)),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Veuillez d'abord sélectionner une section",
+                                  style: TextStyle(color: Color(0xFFF59E0B), fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (_filteredClasses.isEmpty && isSecondary && _selectedSection != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.warning, size: 16, color: Color(0xFFF59E0B)),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Aucune classe disponible pour cette section",
+                                  style: TextStyle(color: Color(0xFFF59E0B), fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        DropdownButtonFormField<Map<String, dynamic>>(
+                          value: _selectedClass,
+                          hint: Text(_filteredClasses.isEmpty 
+                              ? 'Aucune classe disponible' 
+                              : 'Sélectionner une classe *'),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            prefixIcon: const Icon(Icons.class_, color: Color(0xFF10B981)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: _filteredClasses.map((classItem) {
+                            return DropdownMenuItem(
+                              value: classItem,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(classItem['className'], style: const TextStyle(fontWeight: FontWeight.w500)),
+                                  Text('${classItem['level']} • ${classItem['year']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: _filteredClasses.isEmpty ? null : (value) {
+                            setState(() {
+                              _selectedClass = value;
+                            });
+                          },
+                          validator: (value) => value == null ? 'Classe requise' : null,
+                        ),
+                      
+                      if (_allClasses.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Container(
@@ -416,11 +633,28 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                     
                     const SizedBox(height: 16),
                     
+                    // Section informations personnelles
                     _buildSection("Informations personnelles", Icons.person, const Color(0xFF3B82F6), [
                       TextFormField(
                         controller: fullNameController,
                         decoration: const InputDecoration(labelText: "Nom complet *", border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)),
                         validator: (v) => v!.isEmpty ? "Nom requis" : null,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _selectedGender,
+                        decoration: InputDecoration(
+                          labelText: "Sexe *",
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          prefixIcon: const Icon(Icons.wc, color: Color(0xFF3B82F6)),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        items: _genders.map((gender) {
+                          return DropdownMenuItem(value: gender, child: Text(gender));
+                        }).toList(),
+                        onChanged: (value) => setState(() => _selectedGender = value!),
+                        validator: (v) => v == null ? 'Sexe requis' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -436,7 +670,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                     
                     const SizedBox(height: 16),
                     
-                    // Section liaison parent (optionnel)
+                    // Section liaison parent
                     _buildSection("Lier un parent (Optionnel)", Icons.family_restroom, const Color(0xFF14B8A6), [
                       DropdownButtonFormField<Map<String, dynamic>>(
                         value: _selectedParentAccount,

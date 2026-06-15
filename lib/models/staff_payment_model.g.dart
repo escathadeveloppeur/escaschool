@@ -30,7 +30,7 @@ class StaffPaymentModelAdapter extends TypeAdapter<StaffPaymentModel> {
       paymentMethod: fields[10] as String,
       reference: fields[11] as String?,
       notes: fields[12] as String?,
-      schoolId: fields[13] as int,
+      schoolId: fields[13] as String,
       createdAt: fields[14] as DateTime?,
       firestoreId: fields[15] as String?,
     );

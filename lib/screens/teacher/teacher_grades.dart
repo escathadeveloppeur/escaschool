@@ -33,11 +33,13 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
   
   String selectedClass = '';
   String selectedSubject = '';
-  String selectedEvaluation = 'Devoir';
+  String selectedSemester = 'S1';
+  String selectedEvaluation = 'Devoir 1';
   
-  // 🔥 Récupération des matières depuis Firestore (classes collection)
-  Map<String, List<Map<String, dynamic>>> _subjectsFromClasses = {};
-  List<String> _currentSubjectsForClass = [];
+  // 🔥 Données du professeur (classes et matières assignées)
+  List<Map<String, dynamic>> _teacherClasses = [];
+  List<String> _teacherSubjectsForClass = [];
+  List<Map<String, dynamic>> _teacherClassesData = [];
   
   TextEditingController scoreController = TextEditingController();
   TextEditingController maxScoreController = TextEditingController();
@@ -52,6 +54,24 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
   bool _isAddingNote = false;
   late AnimationController _animationController;
 
+  List<Map<String, dynamic>> get _evaluationTypes {
+    if (selectedSemester == 'S1') {
+      return [
+        {'value': 'Devoir 1', 'label': '📝 P1 - Devoir 1 (1er devoir du semestre)', 'icon': Icons.assignment},
+        {'value': 'Devoir 2', 'label': '📝 P2 - Devoir 2 (2ème devoir du semestre)', 'icon': Icons.assignment},
+        {'value': 'Interrogation', 'label': '❓ Interrogation (question rapide)', 'icon': Icons.quiz},
+        {'value': 'Examen', 'label': '📚 EX1 - Examen (fin de semestre)', 'icon': Icons.school},
+      ];
+    } else {
+      return [
+        {'value': 'Devoir 1', 'label': '📝 P3 - Devoir 1 (1er devoir du semestre)', 'icon': Icons.assignment},
+        {'value': 'Devoir 2', 'label': '📝 P4 - Devoir 2 (2ème devoir du semestre)', 'icon': Icons.assignment},
+        {'value': 'Interrogation', 'label': '❓ Interrogation (question rapide)', 'icon': Icons.quiz},
+        {'value': 'Examen', 'label': '📚 EX2 - Examen (fin de semestre)', 'icon': Icons.school},
+      ];
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,24 +79,7 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    
-    print('\n╔════════════════════════════════════════════════════════════╗');
-    print('║     INITIALISATION TEACHER GRADES SCREEN                   ║');
-    print('╚════════════════════════════════════════════════════════════╝\n');
-    print('📌 Professeur ID: ${widget.professorFirestoreId}');
-    print('📌 Professeur Nom: ${widget.teacherName}');
-    print('📌 Classes assignées reçues: ${widget.assignedClasses}');
-    print('📌 Matières assignées reçues: ${widget.assignedSubjects}\n');
-    
-    // Sélectionner la première classe disponible
-    if (widget.assignedClasses.isNotEmpty) {
-      selectedClass = widget.assignedClasses.first;
-      print('✅ Classe sélectionnée par défaut: $selectedClass');
-    } else {
-      print('⚠️ Aucune classe assignée au professeur!');
-    }
-    
-    _loadDataFromFirestore();
+    _loadTeacherData();
   }
 
   @override
@@ -89,185 +92,196 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
     super.dispose();
   }
 
-  /// 🔥 Charger les données depuis Firestore
-  Future<void> _loadDataFromFirestore() async {
+  /// 🔥 Charger les classes où le professeur enseigne
+  Future<void> _loadTeacherData() async {
     setState(() => _isLoading = true);
     
     print('\n╔════════════════════════════════════════════════════════════╗');
     print('║     CHARGEMENT DES DONNÉES - TEACHER GRADES                ║');
     print('╚════════════════════════════════════════════════════════════╝\n');
-    print('📌 Professeur ID: ${widget.professorFirestoreId}');
-    print('📌 Classe sélectionnée: $selectedClass\n');
+    print('📌 Professeur ID: ${widget.professorFirestoreId}\n');
     
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      // ==================== 1. CHARGER LES CLASSES ET LEURS MATIÈRES ====================
-      print('🔍 [1/4] Chargement des classes et matières depuis Firestore...');
-      print('   → Collection: classes');
+      // ==================== 1. CHARGER LES CLASSES OÙ LE PROFESSEUR ENSEIGNE ====================
+      print('🔍 [1/3] Chargement des classes où le professeur enseigne...');
       
       final classesSnapshot = await FirebaseFirestore.instance
           .collection('classes')
+          .where('schoolId', isEqualTo: schoolId)
           .get();
       
-      print('   📊 ${classesSnapshot.docs.length} classe(s) trouvée(s)');
+      _teacherClasses = [];
+      _teacherClassesData = [];
       
-      // Organiser les matières par classe
-      _subjectsFromClasses.clear();
       for (var doc in classesSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final className = data['className'] ?? '';
         final subjects = data['subjects'] as List<dynamic>? ?? [];
         
-        print('\n   📚 Classe trouvée: $className');
-        print('      - ID: ${doc.id}');
-        print('      - Matières dans la classe: ${subjects.length}');
+        // Vérifier si le professeur enseigne dans cette classe
+        final hasProfessorSubjects = subjects.any((subject) {
+          final subjectMap = subject as Map<String, dynamic>;
+          return subjectMap['professorFirestoreId'] == widget.professorFirestoreId;
+        });
         
-        if (className.isNotEmpty && subjects.isNotEmpty) {
-          _subjectsFromClasses[className] = [];
-          for (var subject in subjects) {
-            final subjectMap = subject as Map<String, dynamic>;
-            final subjectName = subjectMap['name'] ?? '';
-            final professorId = subjectMap['professorFirestoreId'] ?? '';
-            
-            print('         📖 Matière: $subjectName');
-            print('            - Professeur assigné ID: $professorId');
-            print('            - Professeur actuel ID: ${widget.professorFirestoreId}');
-            print('            - Correspond: ${professorId == widget.professorFirestoreId ? "✅ OUI" : "❌ NON"}');
-            
-            _subjectsFromClasses[className]!.add({
-              'name': subjectName,
-              'professorFirestoreId': professorId,
-              'coefficient': subjectMap['coefficient'] ?? 1.0,
-            });
-          }
+        if (hasProfessorSubjects && className.isNotEmpty) {
+          _teacherClasses.add({
+            'firestoreId': doc.id,
+            'className': className,
+            'level': data['level'] ?? '',
+            'section': data['section'] ?? '',
+            'cycleType': data['cycleType'] ?? 'primaire',
+          });
+          
+          _teacherClassesData.add({
+            'firestoreId': doc.id,
+            'className': className,
+            'subjects': subjects,
+          });
+          
+          print('   ✅ Classe trouvée: $className');
         }
       }
       
-      // ==================== 2. FILTRER LES MATIÈRES DU PROFESSEUR ====================
-      print('\n🔍 [2/4] Filtrage des matières du professeur...');
+      print('   📊 ${_teacherClasses.length} classe(s) trouvée(s)');
       
-      if (selectedClass.isNotEmpty && _subjectsFromClasses.containsKey(selectedClass)) {
-        final allSubjectsForClass = _subjectsFromClasses[selectedClass]!;
-        _currentSubjectsForClass = [];
-        
-        for (var subject in allSubjectsForClass) {
-          final professorId = subject['professorFirestoreId'] ?? '';
-          final subjectName = subject['name'] ?? '';
-          
-          // Vérifier si le professeur est assigné à cette matière
-          if (professorId == widget.professorFirestoreId) {
-            _currentSubjectsForClass.add(subjectName);
-            print('   ✅ Matière autorisée: $subjectName (professeur assigné)');
-          } else {
-            print('   ⛔ Matière non autorisée: $subjectName (professeur: $professorId)');
-          }
-        }
-        
-        print('\n   📊 Total matières autorisées: ${_currentSubjectsForClass.length}');
-        
-        // Vérifier si la matière sélectionnée existe toujours
-        if (_currentSubjectsForClass.isNotEmpty) {
-          if (!_currentSubjectsForClass.contains(selectedSubject)) {
-            selectedSubject = _currentSubjectsForClass.first;
-            print('   ✅ Matière sélectionnée: $selectedSubject');
-          }
-        } else {
-          selectedSubject = '';
-          print('   ⚠️ Aucune matière autorisée pour cette classe!');
+      // Définir la classe sélectionnée par défaut
+      if (_teacherClasses.isNotEmpty) {
+        if (selectedClass.isEmpty || !_teacherClasses.any((c) => c['className'] == selectedClass)) {
+          selectedClass = _teacherClasses.first['className'];
         }
       } else {
-        _currentSubjectsForClass = [];
-        selectedSubject = '';
-        print('   ⚠️ Aucune matière trouvée pour la classe $selectedClass');
+        selectedClass = '';
       }
       
-      // ==================== 3. CHARGER LES ÉTUDIANTS ====================
-      print('\n🔍 [3/4] Chargement des étudiants...');
-      
+      // ==================== 2. CHARGER LES MATIÈRES POUR LA CLASSE SÉLECTIONNÉE ====================
       if (selectedClass.isNotEmpty) {
-        final studentsSnapshot = await FirebaseFirestore.instance
-            .collection('students')
-            .where('className', isEqualTo: selectedClass)
-            .get();
-        
-        students = [];
-        print('   📊 ${studentsSnapshot.docs.length} étudiant(s) trouvé(s) pour $selectedClass');
-        
-        for (var doc in studentsSnapshot.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          students.add({
-            'firestoreId': doc.id,
-            'fullName': data['fullName'] ?? 'Sans nom',
-            'className': data['className'] ?? '',
-            'parentUserId': data['parentUserId'],
-          });
-          print('      - ${data['fullName']} (ID: ${doc.id})');
-        }
+        await _loadSubjectsForClass(selectedClass);
       }
       
-      // ==================== 4. CHARGER LES NOTES ====================
-      print('\n🔍 [4/4] Chargement des notes...');
+      // ==================== 3. CHARGER LES ÉTUDIANTS ET NOTES ====================
+      await _loadStudentsAndGrades();
       
-      if (selectedClass.isNotEmpty && selectedSubject.isNotEmpty) {
-        final gradesSnapshot = await FirebaseFirestore.instance
-            .collection('grades')
-            .where('className', isEqualTo: selectedClass)
-            .where('subject', isEqualTo: selectedSubject)
-            .get();
-        
-        grades = [];
-        print('   📊 ${gradesSnapshot.docs.length} note(s) trouvée(s) pour $selectedClass - $selectedSubject');
-        
-        for (var doc in gradesSnapshot.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          grades.add({
-            'id': doc.id,
-            'studentFirestoreId': data['studentFirestoreId'] ?? '',
-            'studentName': data['studentName'] ?? '',
-            'subject': data['subject'] ?? '',
-            'evaluationType': data['evaluationType'] ?? '',
-            'score': (data['score'] as num?)?.toDouble() ?? 0.0,
-            'maxScore': (data['maxScore'] as num?)?.toDouble() ?? 20.0,
-            'coefficient': (data['coefficient'] as num?)?.toDouble() ?? 1.0,
-            'comments': data['comments'] ?? '',
-            'date': data['date'] != null ? (data['date'] as Timestamp).toDate() : DateTime.now(),
-          });
-        }
-        
-        // Organiser les notes par étudiant
-        studentGrades.clear();
-        for (var grade in grades) {
-          final studentId = grade['studentFirestoreId'];
-          if (!studentGrades.containsKey(studentId)) {
-            studentGrades[studentId] = [];
-          }
-          studentGrades[studentId]!.add(grade);
-        }
-        
-        print('   📊 Notes organisées pour ${studentGrades.length} étudiant(s)');
-      }
-      
-      // ==================== RÉSUMÉ FINAL ====================
-      print('\n╔════════════════════════════════════════════════════════════╗');
-      print('║                    RÉSUMÉ FINAL                            ║');
-      print('╠════════════════════════════════════════════════════════════╣');
-      print('║   Classe: $selectedClass');
-      print('║   Matières autorisées: ${_currentSubjectsForClass.length}');
-      for (var subject in _currentSubjectsForClass) {
-        print('║      - $subject');
-      }
-      print('║   Étudiants: ${students.length}');
-      print('║   Notes chargées: ${grades.length}');
-      print('╚════════════════════════════════════════════════════════════╝\n');
+      print('\n✅ Chargement terminé\n');
+      _animationController.forward(from: 0);
       
     } catch (e) {
-      print('❌❌❌ ERREUR CRITIQUE: $e ❌❌❌');
+      print('❌ Erreur: $e');
       _showSnackBar('Erreur de chargement: $e', const Color(0xFFEF4444));
     } finally {
       setState(() => _isLoading = false);
-      _animationController.forward(from: 0);
+    }
+  }
+
+  /// 🔥 Charger les matières du professeur pour une classe spécifique
+  Future<void> _loadSubjectsForClass(String className) async {
+    print('🔍 Chargement des matières pour la classe: $className');
+    
+    final classData = _teacherClassesData.firstWhere(
+      (c) => c['className'] == className,
+      orElse: () => {},
+    );
+    
+    if (classData.isEmpty) {
+      _teacherSubjectsForClass = [];
+      selectedSubject = '';
+      print('   ⚠️ Classe non trouvée dans les données');
+      return;
+    }
+    
+    final subjects = classData['subjects'] as List<dynamic>? ?? [];
+    _teacherSubjectsForClass = [];
+    
+    for (var subject in subjects) {
+      final subjectMap = subject as Map<String, dynamic>;
+      final subjectName = subjectMap['name'] ?? '';
+      final professorId = subjectMap['professorFirestoreId'] ?? '';
+      
+      if (professorId == widget.professorFirestoreId && subjectName.isNotEmpty) {
+        _teacherSubjectsForClass.add(subjectName);
+        print('   ✅ Matière: $subjectName');
+      }
+    }
+    
+    if (_teacherSubjectsForClass.isNotEmpty) {
+      if (!_teacherSubjectsForClass.contains(selectedSubject)) {
+        selectedSubject = _teacherSubjectsForClass.first;
+      }
+      print('   ✅ Matière sélectionnée: $selectedSubject');
+    } else {
+      selectedSubject = '';
+      print('   ⚠️ Aucune matière assignée pour ce professeur dans cette classe');
+    }
+  }
+
+  /// 🔥 Charger les étudiants et les notes
+  Future<void> _loadStudentsAndGrades() async {
+    if (selectedClass.isEmpty) {
+      students = [];
+      return;
+    }
+    
+    print('🔍 [2/3] Chargement des étudiants pour la classe: $selectedClass');
+    
+    final studentsSnapshot = await FirebaseFirestore.instance
+        .collection('students')
+        .where('className', isEqualTo: selectedClass)
+        .get();
+    
+    students = [];
+    for (var doc in studentsSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      students.add({
+        'firestoreId': doc.id,
+        'fullName': data['fullName'] ?? 'Sans nom',
+        'className': data['className'] ?? '',
+        'parentUserId': data['parentUserId'],
+      });
+    }
+    print('   📊 ${students.length} étudiant(s) trouvé(s)');
+    
+    // ==================== CHARGER LES NOTES ====================
+    if (selectedClass.isNotEmpty && selectedSubject.isNotEmpty) {
+      print('🔍 [3/3] Chargement des notes pour $selectedClass - $selectedSubject');
+      
+      final gradesSnapshot = await FirebaseFirestore.instance
+          .collection('grades')
+          .where('className', isEqualTo: selectedClass)
+          .where('subject', isEqualTo: selectedSubject)
+          .get();
+      
+      grades = [];
+      for (var doc in gradesSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        grades.add({
+          'id': doc.id,
+          'studentFirestoreId': data['studentFirestoreId'] ?? '',
+          'studentName': data['studentName'] ?? '',
+          'subject': data['subject'] ?? '',
+          'semester': data['semester'] ?? 'S1',
+          'evaluationType': data['evaluationType'] ?? '',
+          'score': (data['score'] as num?)?.toDouble() ?? 0.0,
+          'maxScore': (data['maxScore'] as num?)?.toDouble() ?? 20.0,
+          'coefficient': (data['coefficient'] as num?)?.toDouble() ?? 1.0,
+          'comments': data['comments'] ?? '',
+          'date': data['date'] != null ? (data['date'] as Timestamp).toDate() : DateTime.now(),
+        });
+      }
+      
+      // Organiser les notes par étudiant
+      studentGrades.clear();
+      for (var grade in grades) {
+        final studentId = grade['studentFirestoreId'];
+        if (!studentGrades.containsKey(studentId)) {
+          studentGrades[studentId] = [];
+        }
+        studentGrades[studentId]!.add(grade);
+      }
+      
+      print('   📊 ${grades.length} note(s) chargée(s) pour ${studentGrades.length} étudiant(s)');
     }
   }
 
@@ -305,7 +319,7 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
       _showSnackBar('Erreur lors de la sélection du fichier', const Color(0xFFEF4444));
     }
   }
-
+  
   Future<void> _pickVideo() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -387,7 +401,18 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
     return totalCoef > 0 ? (total / totalCoef).roundToDouble() : 0;
   }
 
-  /// 🔥 Ajouter une note dans Firestore
+  String _getFinalEvaluationType() {
+    if (selectedSemester == 'S1') {
+      return selectedEvaluation;
+    } else {
+      if (selectedEvaluation == 'Examen') {
+        return 'Examen';
+      } else {
+        return '${selectedEvaluation} S2';
+      }
+    }
+  }
+
   Future<void> _addGradeForStudent(Map<String, dynamic> student) async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -400,20 +425,15 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
       final score = double.tryParse(scoreController.text) ?? 0;
       final maxScore = double.tryParse(maxScoreController.text) ?? 20;
       final coefficient = double.tryParse(coefficientController.text) ?? 1;
-      
-      print('\n📝 AJOUT NOTE:');
-      print('   → Étudiant: ${student['fullName']}');
-      print('   → Classe: $selectedClass');
-      print('   → Matière: $selectedSubject');
-      print('   → Note: $score/$maxScore');
-      print('   → Coef: $coefficient');
+      final evaluationType = _getFinalEvaluationType();
       
       final gradeData = {
         'studentFirestoreId': student['firestoreId'],
         'studentName': student['fullName'],
         'className': selectedClass,
         'subject': selectedSubject,
-        'evaluationType': selectedEvaluation,
+        'semester': selectedSemester,
+        'evaluationType': evaluationType,
         'score': score,
         'maxScore': maxScore,
         'coefficient': coefficient,
@@ -430,36 +450,28 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
       coefficientController.clear();
       commentController.clear();
       
-      await _loadDataFromFirestore();
+      await _loadStudentsAndGrades();
       _showSnackBar('Note ajoutée pour ${student['fullName']}', const Color(0xFF10B981));
-      print('✅ Note ajoutée avec succès');
     } catch (e) {
-      print('❌ Erreur: $e');
       _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
     } finally {
       setState(() => _isAddingNote = false);
     }
   }
 
-  /// 🔥 Ajouter une note pour toute la classe
   Future<void> _addGradeForAll() async {
     if (!_formKey.currentState!.validate()) return;
-    
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final schoolId = auth.currentSchoolId;
-    
-    final score = double.tryParse(scoreController.text) ?? 0;
-    final maxScore = double.tryParse(maxScoreController.text) ?? 20;
-    final coefficient = double.tryParse(coefficientController.text) ?? 1;
     
     setState(() => _isAddingNote = true);
     
     try {
-      print('\n📝 AJOUT NOTES POUR TOUTE LA CLASSE:');
-      print('   → Classe: $selectedClass');
-      print('   → Matière: $selectedSubject');
-      print('   → Note: $score/$maxScore');
-      print('   → Nombre étudiants: ${students.length}');
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final schoolId = auth.currentSchoolId;
+      
+      final score = double.tryParse(scoreController.text) ?? 0;
+      final maxScore = double.tryParse(maxScoreController.text) ?? 20;
+      final coefficient = double.tryParse(coefficientController.text) ?? 1;
+      final evaluationType = _getFinalEvaluationType();
       
       for (var student in students) {
         final gradeData = {
@@ -467,7 +479,8 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
           'studentName': student['fullName'],
           'className': selectedClass,
           'subject': selectedSubject,
-          'evaluationType': selectedEvaluation,
+          'semester': selectedSemester,
+          'evaluationType': evaluationType,
           'score': score,
           'maxScore': maxScore,
           'coefficient': coefficient,
@@ -484,11 +497,9 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
       coefficientController.clear();
       commentController.clear();
       
-      await _loadDataFromFirestore();
+      await _loadStudentsAndGrades();
       _showSnackBar('Notes ajoutées pour tous les élèves', const Color(0xFF10B981));
-      print('✅ ${students.length} notes ajoutées avec succès');
     } catch (e) {
-      print('❌ Erreur: $e');
       _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
     } finally {
       setState(() => _isAddingNote = false);
@@ -502,21 +513,13 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'Gestion des notes',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
+        title: const Text('Gestion des notes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.grey[800],
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadDataFromFirestore,
+            onPressed: _loadTeacherData,
             tooltip: 'Rafraîchir',
           ),
           IconButton(
@@ -527,11 +530,7 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
-              ),
-            )
+          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981))))
           : SingleChildScrollView(
               child: Column(
                 children: [
@@ -539,22 +538,12 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                     Container(
                       margin: const EdgeInsets.all(16),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      decoration: BoxDecoration(color: const Color(0xFF3B82F6).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                       child: Row(
                         children: [
                           const Icon(Icons.business, size: 18, color: Color(0xFF3B82F6)),
                           const SizedBox(width: 8),
-                          Text(
-                            'École : ${auth.schoolName ?? auth.currentSchoolId}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF3B82F6),
-                            ),
-                          ),
+                          Text('École : ${auth.schoolName ?? auth.currentSchoolId}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6))),
                         ],
                       ),
                     ),
@@ -570,20 +559,27 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                             Expanded(
                               child: DropdownButtonFormField<String>(
                                 value: selectedClass.isNotEmpty ? selectedClass : null,
-                                items: widget.assignedClasses.map((className) {
-                                  return DropdownMenuItem(
-                                    value: className,
-                                    child: Text(className),
+                                hint: _teacherClasses.isEmpty 
+                                    ? const Text('Aucune classe assignée') 
+                                    : const Text('Sélectionner une classe'),
+                                items: _teacherClasses.map<DropdownMenuItem<String>>((c) {
+                                  final sectionDisplay = c['section'] != null && c['section'].isNotEmpty
+                                      ? ' - ${c['section']}'
+                                      : '';
+                                  return DropdownMenuItem<String>(
+                                    value: c['className'],
+                                    child: Text('${c['className']}${sectionDisplay} (${c['level']})'),
                                   );
                                 }).toList(),
-                                onChanged: (value) {
-                                  print('\n🔄 Changement de classe: $value');
+                                onChanged: _teacherClasses.isNotEmpty ? (value) async {
                                   setState(() {
                                     selectedClass = value!;
                                     selectedSubject = '';
-                                    _loadDataFromFirestore();
                                   });
-                                },
+                                  await _loadSubjectsForClass(selectedClass);
+                                  await _loadStudentsAndGrades();
+                                  setState(() {});
+                                } : null,
                                 decoration: InputDecoration(
                                   labelText: "Classe",
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -596,21 +592,24 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                value: selectedSubject.isNotEmpty && _currentSubjectsForClass.contains(selectedSubject) 
+                                value: selectedSubject.isNotEmpty && _teacherSubjectsForClass.contains(selectedSubject) 
                                     ? selectedSubject 
                                     : null,
-                                items: _currentSubjectsForClass.map((subject) {
-                                  return DropdownMenuItem(
+                                hint: _teacherSubjectsForClass.isEmpty 
+                                    ? const Text('Aucune matière') 
+                                    : const Text('Sélectionner une matière'),
+                                items: _teacherSubjectsForClass.map<DropdownMenuItem<String>>((subject) {
+                                  return DropdownMenuItem<String>(
                                     value: subject,
                                     child: Text(subject),
                                   );
                                 }).toList(),
-                                onChanged: _currentSubjectsForClass.isNotEmpty ? (value) {
-                                  print('\n🔄 Changement de matière: $value');
+                                onChanged: _teacherSubjectsForClass.isNotEmpty ? (value) async {
                                   setState(() {
                                     selectedSubject = value!;
-                                    _loadDataFromFirestore();
                                   });
+                                  await _loadStudentsAndGrades();
+                                  setState(() {});
                                 } : null,
                                 decoration: InputDecoration(
                                   labelText: "Matière",
@@ -619,9 +618,6 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                   filled: true,
                                   fillColor: Colors.white,
                                 ),
-                                hint: _currentSubjectsForClass.isEmpty 
-                                    ? const Text('Aucune matière assignée') 
-                                    : null,
                               ),
                             ),
                           ],
@@ -638,10 +634,7 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            const Color(0xFFF59E0B).withOpacity(0.1),
-                            const Color(0xFFF59E0B).withOpacity(0.05),
-                          ],
+                          colors: [const Color(0xFFF59E0B).withOpacity(0.1), const Color(0xFFF59E0B).withOpacity(0.05)],
                         ),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.2)),
@@ -670,18 +663,8 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Examens en ligne',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFFD97706),
-                                      ),
-                                    ),
-                                    Text(
-                                      'Gérer et consulter les examens en ligne',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                    ),
+                                    const Text('Examens en ligne', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                                    Text('Gérer et consulter les examens en ligne', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                                   ],
                                 ),
                               ),
@@ -713,10 +696,7 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                   child: const Icon(Icons.attach_file, color: Color(0xFF3B82F6), size: 20),
                                 ),
                                 const SizedBox(width: 12),
-                                const Text(
-                                  'Joindre un fichier (optionnel)',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                                ),
+                                const Text('Joindre un fichier (optionnel)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -816,15 +796,39 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                 ],
                               ),
                               const SizedBox(height: 20),
+                              
+                              DropdownButtonFormField<String>(
+                                value: selectedSemester,
+                                items: const [
+                                  DropdownMenuItem(value: 'S1', child: Text('📗 Semestre 1 (P1, P2, Interro, EX1)')),
+                                  DropdownMenuItem(value: 'S2', child: Text('📘 Semestre 2 (P3, P4, Interro, EX2)')),
+                                ],
+                                onChanged: (value) => setState(() => selectedSemester = value!),
+                                decoration: InputDecoration(
+                                  labelText: "Semestre",
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                  prefixIcon: const Icon(Icons.calendar_month, color: Color(0xFF10B981)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 12),
+                              
                               DropdownButtonFormField<String>(
                                 value: selectedEvaluation,
-                                items: const [
-                                  DropdownMenuItem(value: 'Devoir', child: Text('Devoir')),
-                                  DropdownMenuItem(value: 'Examen', child: Text('Examen')),
-                                  DropdownMenuItem(value: 'Participation', child: Text('Participation')),
-                                  DropdownMenuItem(value: 'Projet', child: Text('Projet')),
-                                  DropdownMenuItem(value: 'Interrogation', child: Text('Interrogation')),
-                                ],
+                                items: _evaluationTypes.map<DropdownMenuItem<String>>((type) {
+                                  return DropdownMenuItem<String>(
+                                    value: type['value'],
+                                    child: Row(
+                                      children: [
+                                        Icon(type['icon'], size: 18, color: const Color(0xFF10B981)),
+                                        const SizedBox(width: 8),
+                                        Text(type['label']),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
                                 onChanged: (value) => setState(() => selectedEvaluation = value!),
                                 decoration: InputDecoration(
                                   labelText: "Type d'évaluation",
@@ -834,7 +838,9 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                   fillColor: Colors.white,
                                 ),
                               ),
+                              
                               const SizedBox(height: 12),
+                              
                               Row(
                                 children: [
                                   Expanded(
@@ -1012,6 +1018,9 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                       else
                                         ...studentGradeList.map((grade) {
                                           final percentage = (grade['score'] as double) / (grade['maxScore'] as double) * 20;
+                                          final semesterLabel = grade['semester'] == 'S1' ? '📗 S1' : '📘 S2';
+                                          final typeLabel = grade['evaluationType'] ?? '';
+                                          
                                           return Container(
                                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                             padding: const EdgeInsets.all(12),
@@ -1027,7 +1036,13 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
-                                                      Text(grade['evaluationType'], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                                      Row(
+                                                        children: [
+                                                          Text(semesterLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: grade['semester'] == 'S1' ? Colors.blue : Colors.orange)),
+                                                          const SizedBox(width: 8),
+                                                          Text(typeLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                                        ],
+                                                      ),
                                                       if ((grade['comments'] as String).isNotEmpty)
                                                         Text(grade['comments'], style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                                                     ],
@@ -1053,9 +1068,9 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                     ),
                   ],
 
-                  if (selectedSubject.isEmpty && !_isLoading && _currentSubjectsForClass.isEmpty)
+                  if (selectedSubject.isEmpty && !_isLoading && _teacherSubjectsForClass.isEmpty && selectedClass.isNotEmpty)
                     SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.5,
+                      height: MediaQuery.of(context).size.height * 0.4,
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1065,8 +1080,6 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                             const Text('Aucune matière assignée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B))),
                             const SizedBox(height: 8),
                             Text('Vous n\'avez pas de matière dans cette classe', style: TextStyle(color: Colors.grey[500])),
-                            const SizedBox(height: 8),
-                            Text('Vérifiez que les matières sont assignées à votre ID professeur', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
                           ],
                         ),
                       ),
@@ -1124,15 +1137,39 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                 ],
               ),
               const SizedBox(height: 20),
+              
+              DropdownButtonFormField<String>(
+                value: selectedSemester,
+                items: const [
+                  DropdownMenuItem(value: 'S1', child: Text('📗 Semestre 1 (P1, P2, Interro, EX1)')),
+                  DropdownMenuItem(value: 'S2', child: Text('📘 Semestre 2 (P3, P4, Interro, EX2)')),
+                ],
+                onChanged: (value) => setState(() => selectedSemester = value!),
+                decoration: InputDecoration(
+                  labelText: "Semestre",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  prefixIcon: const Icon(Icons.calendar_month, color: Color(0xFF10B981)),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+              ),
+              
+              const SizedBox(height: 12),
+              
               DropdownButtonFormField<String>(
                 value: selectedEvaluation,
-                items: const [
-                  DropdownMenuItem(value: 'Devoir', child: Text('Devoir')),
-                  DropdownMenuItem(value: 'Examen', child: Text('Examen')),
-                  DropdownMenuItem(value: 'Participation', child: Text('Participation')),
-                  DropdownMenuItem(value: 'Projet', child: Text('Projet')),
-                  DropdownMenuItem(value: 'Interrogation', child: Text('Interrogation')),
-                ],
+                items: _evaluationTypes.map<DropdownMenuItem<String>>((type) {
+                  return DropdownMenuItem<String>(
+                    value: type['value'],
+                    child: Row(
+                      children: [
+                        Icon(type['icon'], size: 18, color: const Color(0xFF10B981)),
+                        const SizedBox(width: 8),
+                        Text(type['label']),
+                      ],
+                    ),
+                  );
+                }).toList(),
                 onChanged: (value) => setState(() => selectedEvaluation = value!),
                 decoration: InputDecoration(
                   labelText: "Type d'évaluation",
@@ -1142,7 +1179,9 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                   fillColor: Colors.white,
                 ),
               ),
+              
               const SizedBox(height: 12),
+              
               TextFormField(
                 controller: scoreController,
                 decoration: InputDecoration(
@@ -1205,10 +1244,8 @@ class _TeacherGradesScreenState extends State<TeacherGradesScreen> with SingleTi
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
-                        if (_formKey.currentState!.validate()) {
-                          Navigator.pop(context);
-                          await _addGradeForStudent(student);
-                        }
+                        Navigator.pop(context);
+                        await _addGradeForStudent(student);
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: const Text('Ajouter'),

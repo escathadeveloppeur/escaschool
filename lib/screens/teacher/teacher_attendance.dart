@@ -1,4 +1,5 @@
 // lib/screens/teacher/teacher_attendance_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -30,13 +31,16 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
   Map<String, String> attendanceStatus = {};
   Map<String, String> attendanceRemark = {};
   Map<String, bool> attendanceScanned = {};
-  Map<String, bool> attendanceAlreadyExists = {}; // 🔥 Pour marquer les présences déjà enregistrées
+  Map<String, bool> attendanceAlreadyExists = {};
   
   String selectedClass = '';
   String selectedSubject = '';
   DateTime selectedDate = DateTime.now();
   
+  List<Map<String, dynamic>> _teacherClasses = []; // Classes où le prof enseigne
   List<String> _teacherSubjectsForClass = [];
+  List<Map<String, dynamic>> _teacherClassesData = []; // Données complètes des classes du prof
+  
   bool _isScanning = false;
   bool _isSaving = false;
   bool _isLoading = true;
@@ -49,10 +53,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    if (widget.assignedClasses.isNotEmpty) {
-      selectedClass = widget.assignedClasses.first;
-    }
-    _loadDataFromFirestore();
+    _loadTeacherData();
   }
 
   @override
@@ -61,8 +62,8 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
     super.dispose();
   }
 
-  /// 🔥 Charger les données depuis Firestore
-  Future<void> _loadDataFromFirestore() async {
+  /// 🔥 Charger les classes où le professeur enseigne
+  Future<void> _loadTeacherData() async {
     setState(() {
       _isLoading = true;
       _isSaving = false;
@@ -72,139 +73,67 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
     print('║     CHARGEMENT DES PRÉSENCES                               ║');
     print('╚════════════════════════════════════════════════════════════╝\n');
     print('📌 Professeur ID: ${widget.professorFirestoreId}');
-    print('📌 Classe sélectionnée: $selectedClass');
     print('📌 Date: ${DateFormat('dd/MM/yyyy').format(selectedDate)}\n');
     
     try {
-      // ==================== 1. CHARGER LES MATIÈRES DEPUIS LES CLASSES ====================
-      print('🔍 [1/4] Chargement des matières depuis la collection classes...');
+      // ==================== 1. CHARGER LES CLASSES ET MATIÈRES DU PROFESSEUR ====================
+      print('🔍 [1/3] Chargement des classes où le professeur enseigne...');
       
       final classesSnapshot = await FirebaseFirestore.instance
           .collection('classes')
           .get();
       
-      _teacherSubjectsForClass = [];
+      _teacherClasses = [];
+      _teacherClassesData = [];
       
       for (var doc in classesSnapshot.docs) {
         final data = doc.data();
         final className = data['className'] ?? '';
         final subjects = data['subjects'] as List<dynamic>? ?? [];
         
-        if (className == selectedClass) {
-          print('   📚 Classe trouvée: $className');
-          print('      - Matières dans la classe: ${subjects.length}');
-          
-          for (var subject in subjects) {
-            final subjectMap = subject as Map<String, dynamic>;
-            final subjectName = subjectMap['name'] ?? '';
-            final professorId = subjectMap['professorFirestoreId'] ?? '';
-            
-            print('         📖 Matière: $subjectName');
-            print('            - Professeur assigné: $professorId');
-            print('            - Professeur actuel: ${widget.professorFirestoreId}');
-            
-            if (professorId == widget.professorFirestoreId && subjectName.isNotEmpty) {
-              _teacherSubjectsForClass.add(subjectName);
-              print('            ✅ AJOUTÉE');
-            }
-          }
-        }
-      }
-      
-      // Sélectionner la première matière si disponible
-      if (_teacherSubjectsForClass.isNotEmpty) {
-        if (!_teacherSubjectsForClass.contains(selectedSubject)) {
-          selectedSubject = _teacherSubjectsForClass.first;
-        }
-        print('   ✅ Matière sélectionnée: $selectedSubject');
-      } else {
-        selectedSubject = '';
-        print('   ⚠️ Aucune matière assignée pour ce professeur dans cette classe');
-      }
-      print('');
-      
-      // ==================== 2. CHARGER LES ÉTUDIANTS ====================
-      print('🔍 [2/4] Chargement des étudiants...');
-      
-      final studentsSnapshot = await FirebaseFirestore.instance
-          .collection('students')
-          .where('className', isEqualTo: selectedClass)
-          .get();
-      
-      students = [];
-      for (var doc in studentsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        students.add({
-          'firestoreId': doc.id,
-          'fullName': data['fullName'] ?? 'Sans nom',
-          'className': data['className'] ?? '',
-          'parentUserId': data['parentUserId'],
+        // Vérifier si le professeur enseigne dans cette classe
+        final hasProfessorSubjects = subjects.any((subject) {
+          final subjectMap = subject as Map<String, dynamic>;
+          return subjectMap['professorFirestoreId'] == widget.professorFirestoreId;
         });
+        
+        if (hasProfessorSubjects && className.isNotEmpty) {
+          _teacherClasses.add({
+            'firestoreId': doc.id,
+            'className': className,
+            'level': data['level'] ?? '',
+            'section': data['section'] ?? '',
+            'cycleType': data['cycleType'] ?? 'primaire',
+          });
+          
+          _teacherClassesData.add({
+            'firestoreId': doc.id,
+            'className': className,
+            'subjects': subjects,
+          });
+          
+          print('   ✅ Classe trouvée: $className');
+        }
       }
-      print('   📊 ${students.length} étudiant(s) trouvé(s)');
-      print('');
       
-      // ==================== 3. VÉRIFIER LES PRÉSENCES EXISTANTES ====================
-      if (selectedSubject.isNotEmpty) {
-        print('🔍 [3/4] Vérification des présences existantes pour cette date...');
-        
-        // Créer une plage de dates pour la journée sélectionnée
-        final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-        final endOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
-        
-        final existingAttendance = await FirebaseFirestore.instance
-            .collection('attendances')
-            .where('className', isEqualTo: selectedClass)
-            .where('subject', isEqualTo: selectedSubject)
-            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-            .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-            .get();
-        
-        print('   📊 ${existingAttendance.docs.length} présence(s) existante(s) trouvée(s)');
-        
-        // Mémoriser les étudiants qui ont déjà une présence
-        final existingStudentIds = existingAttendance.docs.map((doc) {
-          final data = doc.data();
-          return data['studentFirestoreId'] as String?;
-        }).where((id) => id != null).toSet();
-        
-        // ==================== 4. INITIALISER LES ÉTATS ====================
-        print('\n🔍 [4/4] Initialisation des états...');
-        
-        for (var student in students) {
-          final studentId = student['firestoreId'];
-          final hasExisting = existingStudentIds.contains(studentId);
-          
-          attendanceAlreadyExists[studentId] = hasExisting;
-          
-          if (hasExisting) {
-            // Récupérer le statut existant
-            final existingDoc = existingAttendance.docs.firstWhere(
-              (doc) => doc.data()['studentFirestoreId'] == studentId,
-              orElse: () => throw Exception('Not found'),
-            );
-            final existingData = existingDoc.data();
-            attendanceStatus[studentId] = existingData['status'] ?? 'present';
-            attendanceRemark[studentId] = existingData['reason'] ?? '';
-            attendanceScanned[studentId] = true;
-            print('   ⏭️ ${student['fullName']} - Présence déjà enregistrée (${attendanceStatus[studentId]})');
-          } else {
-            attendanceStatus[studentId] = 'present';
-            attendanceRemark[studentId] = '';
-            attendanceScanned[studentId] = false;
-            print('   ✅ ${student['fullName']} - Pas de présence pour cette date');
-          }
+      print('   📊 ${_teacherClasses.length} classe(s) trouvée(s)');
+      
+      // Définir la classe sélectionnée par défaut
+      if (_teacherClasses.isNotEmpty) {
+        if (selectedClass.isEmpty || !_teacherClasses.any((c) => c['className'] == selectedClass)) {
+          selectedClass = _teacherClasses.first['className'];
         }
       } else {
-        // Réinitialiser si pas de matière
-        for (var student in students) {
-          final studentId = student['firestoreId'];
-          attendanceStatus[studentId] = 'present';
-          attendanceRemark[studentId] = '';
-          attendanceScanned[studentId] = false;
-          attendanceAlreadyExists[studentId] = false;
-        }
+        selectedClass = '';
       }
+      
+      // ==================== 2. CHARGER LES MATIÈRES POUR LA CLASSE SÉLECTIONNÉE ====================
+      if (selectedClass.isNotEmpty) {
+        await _loadSubjectsForClass(selectedClass);
+      }
+      
+      // ==================== 3. CHARGER LES ÉTUDIANTS ET PRÉSENCES ====================
+      await _loadStudentsAndAttendance();
       
       print('\n✅ Chargement terminé\n');
       _animationController.forward(from: 0);
@@ -217,7 +146,140 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
     }
   }
 
+  /// 🔥 Charger les matières du professeur pour une classe spécifique
+  Future<void> _loadSubjectsForClass(String className) async {
+    print('🔍 Chargement des matières pour la classe: $className');
+    
+    final classData = _teacherClassesData.firstWhere(
+      (c) => c['className'] == className,
+      orElse: () => {},
+    );
+    
+    if (classData.isEmpty) {
+      _teacherSubjectsForClass = [];
+      selectedSubject = '';
+      print('   ⚠️ Classe non trouvée dans les données');
+      return;
+    }
+    
+    final subjects = classData['subjects'] as List<dynamic>? ?? [];
+    _teacherSubjectsForClass = [];
+    
+    for (var subject in subjects) {
+      final subjectMap = subject as Map<String, dynamic>;
+      final subjectName = subjectMap['name'] ?? '';
+      final professorId = subjectMap['professorFirestoreId'] ?? '';
+      
+      if (professorId == widget.professorFirestoreId && subjectName.isNotEmpty) {
+        _teacherSubjectsForClass.add(subjectName);
+        print('   ✅ Matière: $subjectName');
+      }
+    }
+    
+    if (_teacherSubjectsForClass.isNotEmpty) {
+      if (!_teacherSubjectsForClass.contains(selectedSubject)) {
+        selectedSubject = _teacherSubjectsForClass.first;
+      }
+      print('   ✅ Matière sélectionnée: $selectedSubject');
+    } else {
+      selectedSubject = '';
+      print('   ⚠️ Aucune matière assignée pour ce professeur dans cette classe');
+    }
+  }
+
+  /// 🔥 Charger les étudiants et les présences existantes
+  Future<void> _loadStudentsAndAttendance() async {
+    if (selectedClass.isEmpty) {
+      students = [];
+      return;
+    }
+    
+    print('🔍 [2/3] Chargement des étudiants pour la classe: $selectedClass');
+    
+    final studentsSnapshot = await FirebaseFirestore.instance
+        .collection('students')
+        .where('className', isEqualTo: selectedClass)
+        .get();
+    
+    students = [];
+    for (var doc in studentsSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      students.add({
+        'firestoreId': doc.id,
+        'fullName': data['fullName'] ?? 'Sans nom',
+        'className': data['className'] ?? '',
+        'parentUserId': data['parentUserId'],
+      });
+    }
+    print('   📊 ${students.length} étudiant(s) trouvé(s)');
+    
+    // ==================== VÉRIFIER LES PRÉSENCES EXISTANTES ====================
+    if (selectedSubject.isNotEmpty) {
+      print('🔍 [3/3] Vérification des présences existantes pour cette date...');
+      
+      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final endOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 23, 59, 59);
+      
+      final existingAttendance = await FirebaseFirestore.instance
+          .collection('attendances')
+          .where('className', isEqualTo: selectedClass)
+          .where('subject', isEqualTo: selectedSubject)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .get();
+      
+      print('   📊 ${existingAttendance.docs.length} présence(s) existante(s) trouvée(s)');
+      
+      final existingStudentIds = existingAttendance.docs.map((doc) {
+        final data = doc.data();
+        return data['studentFirestoreId'] as String?;
+      }).where((id) => id != null).toSet();
+      
+      for (var student in students) {
+        final studentId = student['firestoreId'];
+        final hasExisting = existingStudentIds.contains(studentId);
+        
+        attendanceAlreadyExists[studentId] = hasExisting;
+        
+        if (hasExisting) {
+          final existingDoc = existingAttendance.docs.firstWhere(
+            (doc) => doc.data()['studentFirestoreId'] == studentId,
+            orElse: () => throw Exception('Not found'),
+          );
+          final existingData = existingDoc.data();
+          attendanceStatus[studentId] = existingData['status'] ?? 'present';
+          attendanceRemark[studentId] = existingData['reason'] ?? '';
+          attendanceScanned[studentId] = true;
+          print('   ⏭️ ${student['fullName']} - Présence déjà enregistrée (${attendanceStatus[studentId]})');
+        } else {
+          attendanceStatus[studentId] = 'present';
+          attendanceRemark[studentId] = '';
+          attendanceScanned[studentId] = false;
+          print('   ✅ ${student['fullName']} - Pas de présence pour cette date');
+        }
+      }
+    } else {
+      for (var student in students) {
+        final studentId = student['firestoreId'];
+        attendanceStatus[studentId] = 'present';
+        attendanceRemark[studentId] = '';
+        attendanceScanned[studentId] = false;
+        attendanceAlreadyExists[studentId] = false;
+      }
+    }
+  }
+
   void _startQRScan() async {
+    if (selectedClass.isEmpty) {
+      _showSnackBar('Veuillez sélectionner une classe', const Color(0xFFF59E0B));
+      return;
+    }
+    
+    if (selectedSubject.isEmpty) {
+      _showSnackBar('Veuillez sélectionner une matière', const Color(0xFFF59E0B));
+      return;
+    }
+    
     setState(() => _isScanning = true);
     
     final result = await Navigator.push(
@@ -242,15 +304,23 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
   }
 
   Future<void> _processQRScan(String qrData) async {
+    print('\n╔════════════════════════════════════════════════════════════╗');
+    print('║                     SCAN QR - DÉBUT                         ║');
+    print('╚════════════════════════════════════════════════════════════╝\n');
+    print('📱 QR reçu: "$qrData"');
+    
     final qrInfo = QRService.validateQRCode(qrData);
     
     if (qrInfo == null) {
+      print('❌ QRService a retourné NULL → QR INVALIDE\n');
       _showSnackBar('QR code invalide', const Color(0xFFEF4444));
       return;
     }
     
     final studentFirestoreId = qrInfo['studentId'] as String?;
+    
     if (studentFirestoreId == null) {
+      print('❌ Pas de studentId dans le QR\n');
       _showSnackBar('QR code invalide', const Color(0xFFEF4444));
       return;
     }
@@ -261,20 +331,24 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
     );
     
     if (student.isEmpty) {
+      print('❌ Étudiant NON trouvé avec ID: $studentFirestoreId\n');
       _showSnackBar('Élève non trouvé dans cette classe', const Color(0xFFEF4444));
       return;
     }
     
-    // Vérifier si la présence existe déjà
     if (attendanceAlreadyExists[studentFirestoreId] == true) {
+      print('⚠️ Présence déjà enregistrée pour aujourd\'hui\n');
       _showSnackBar('⚠️ ${student['fullName']} a déjà une présence pour aujourd\'hui', const Color(0xFFF59E0B));
       return;
     }
     
     if (attendanceScanned[studentFirestoreId] == true) {
+      print('⚠️ Déjà scanné aujourd\'hui\n');
       _showSnackBar('⚠️ ${student['fullName']} déjà scanné', const Color(0xFFF59E0B));
       return;
     }
+    
+    print('✅ Validation réussie ! Enregistrement de la présence\n');
     
     setState(() {
       attendanceStatus[studentFirestoreId] = 'present';
@@ -305,7 +379,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [const Color(0xFF10B981), const Color(0xFF059669)]),
+                  gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)]),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check, color: Colors.white, size: 40),
@@ -349,7 +423,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
   }
 
   void _setStudentStatus(String studentId, String status) {
-    // Vérifier si la présence existe déjà
     if (attendanceAlreadyExists[studentId] == true) {
       _showSnackBar('Cette présence est déjà enregistrée, modification non autorisée', const Color(0xFFF59E0B));
       return;
@@ -372,10 +445,19 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
     _showSnackBar(message, const Color(0xFF3B82F6));
   }
 
-  /// 🔥 Sauvegarder les présences dans Firestore
   Future<void> _saveAttendance() async {
+    if (selectedClass.isEmpty) {
+      _showSnackBar('Veuillez sélectionner une classe', const Color(0xFFF59E0B));
+      return;
+    }
+    
     if (selectedSubject.isEmpty) {
       _showSnackBar('Veuillez sélectionner une matière', const Color(0xFFF59E0B));
+      return;
+    }
+    
+    if (students.isEmpty) {
+      _showSnackBar('Aucun élève dans cette classe', const Color(0xFFF59E0B));
       return;
     }
     
@@ -397,7 +479,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
       for (var student in students) {
         final studentId = student['firestoreId'];
         
-        // Vérifier si la présence existe déjà
         if (attendanceAlreadyExists[studentId] == true) {
           print('   ⏭️ ${student['fullName']} - Présence déjà existante (ignoré)');
           skippedCount++;
@@ -427,9 +508,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
       
       print('\n📊 RÉSULTAT: $savedCount enregistré(s), $skippedCount ignoré(s)');
       _showSuccessSaveDialog(savedCount);
-      
-      // Recharger les données pour mettre à jour les états
-      await _loadDataFromFirestore();
+      await _loadTeacherData(); // Recharger après sauvegarde
       
     } catch (e) {
       print('❌ Erreur: $e');
@@ -459,7 +538,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [const Color(0xFF10B981), const Color(0xFF059669)]),
+                  gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)]),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.save, color: Colors.white, size: 40),
@@ -540,7 +619,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadDataFromFirestore,
+            onPressed: _loadTeacherData,
             tooltip: 'Rafraîchir',
           ),
         ],
@@ -574,16 +653,27 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               value: selectedClass.isNotEmpty ? selectedClass : null,
-                              items: widget.assignedClasses.map((className) {
-                                return DropdownMenuItem(value: className, child: Text(className));
-                              }).toList(),
-                              onChanged: (value) {
+                              hint: _teacherClasses.isEmpty 
+                                  ? const Text('Aucune classe assignée') 
+                                  : const Text('Sélectionner une classe'),
+                          items: _teacherClasses.map<DropdownMenuItem<String>>((c) {
+  final sectionDisplay = c['section'] != null && c['section'].isNotEmpty
+      ? ' - ${c['section']}'
+      : '';
+  return DropdownMenuItem<String>(
+    value: c['className'] as String,
+    child: Text('${c['className']}${sectionDisplay} (${c['level']})'),
+  );
+}).toList(),
+                              onChanged: _teacherClasses.isNotEmpty ? (value) async {
                                 setState(() {
                                   selectedClass = value!;
                                   selectedSubject = '';
-                                  _loadDataFromFirestore();
                                 });
-                              },
+                                await _loadSubjectsForClass(selectedClass);
+                                await _loadStudentsAndAttendance();
+                                setState(() {});
+                              } : null,
                               decoration: InputDecoration(
                                 labelText: "Classe",
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -599,14 +689,18 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                               value: selectedSubject.isNotEmpty && _teacherSubjectsForClass.contains(selectedSubject) 
                                   ? selectedSubject 
                                   : null,
+                              hint: _teacherSubjectsForClass.isEmpty 
+                                  ? const Text('Aucune matière') 
+                                  : const Text('Sélectionner une matière'),
                               items: _teacherSubjectsForClass.map((subject) {
                                 return DropdownMenuItem(value: subject, child: Text(subject));
                               }).toList(),
-                              onChanged: _teacherSubjectsForClass.isNotEmpty ? (value) {
+                              onChanged: _teacherSubjectsForClass.isNotEmpty ? (value) async {
                                 setState(() {
                                   selectedSubject = value!;
-                                  _loadDataFromFirestore();
                                 });
+                                await _loadStudentsAndAttendance();
+                                setState(() {});
                               } : null,
                               decoration: InputDecoration(
                                 labelText: "Matière",
@@ -615,9 +709,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
-                              hint: _teacherSubjectsForClass.isEmpty 
-                                  ? const Text('Aucune matière assignée') 
-                                  : null,
                             ),
                           ),
                         ],
@@ -628,8 +719,36 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                   ),
                 ),
 
-                if (selectedSubject.isNotEmpty) ...[
-                  // Statistiques
+                if (selectedClass.isEmpty && _teacherClasses.isNotEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          const Text('Veuillez sélectionner une classe', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B))),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (selectedSubject.isEmpty && selectedClass.isNotEmpty && _teacherSubjectsForClass.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.warning_amber_rounded, size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          const Text('Aucune matière assignée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B))),
+                          const SizedBox(height: 8),
+                          Text('Vous n\'avez pas de matière dans cette classe', style: TextStyle(color: Colors.grey[500])),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (selectedSubject.isNotEmpty && _teacherSubjectsForClass.isNotEmpty) ...[
+                  // Stats
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
@@ -659,7 +778,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                     ),
                   ),
                   
-                  // Liste des élèves
+                  // Liste des étudiants
                   Expanded(
                     child: students.isEmpty
                         ? Center(
@@ -729,7 +848,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                                                     items: ['present', 'absent', 'late', 'excused'].map((statusValue) {
                                                       return DropdownMenuItem(
                                                         value: statusValue,
-                                                        enabled: !alreadyExists, // 🔥 Désactiver si déjà enregistré
+                                                        enabled: !alreadyExists,
                                                         child: Row(
                                                           children: [
                                                             Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: _getStatusColor(statusValue))),
@@ -795,7 +914,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                           ),
                   ),
 
-                  // Bouton enregistrer
+                  // Bouton sauvegarde
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -817,22 +936,6 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
                     ),
                   ),
                 ],
-
-                if (selectedSubject.isEmpty && selectedClass.isNotEmpty && !_isLoading)
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 64, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
-                          const Text('Aucune matière assignée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF59E0B))),
-                          const SizedBox(height: 8),
-                          Text('Vous n\'avez pas de matière dans cette classe', style: TextStyle(color: Colors.grey[500])),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
     );
@@ -845,7 +948,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
           context: context,
           initialDate: selectedDate,
           firstDate: DateTime(2023),
-          lastDate: DateTime(2025),
+          lastDate: DateTime(2026),
           builder: (context, child) => Theme(
             data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF10B981), onPrimary: Colors.white)),
             child: child!,
@@ -854,7 +957,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> with 
         if (date != null) {
           setState(() {
             selectedDate = date;
-            _loadDataFromFirestore();
+            _loadTeacherData();
           });
         }
       },

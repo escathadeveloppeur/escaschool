@@ -83,44 +83,53 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final schoolId = auth.currentSchoolId;
+  try {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final String? schoolId = auth.currentSchoolId;
 
-      final staff = StaffModel(
-        fullName: _nameController.text.trim(),
-        position: _selectedPosition,
-        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-        hireDate: _selectedHireDate,
-        salary: double.tryParse(_salaryController.text) ?? 0,
-        isActive: _isActive,
-        schoolId: schoolId,
-      );
-
-      if (widget.staff == null) {
-        await _staffService.addStaff(staff, schoolId ?? 0);
-        _showSnackBar('Employé ajouté avec succès', const Color(0xFF10B981));
-      } else {
-        staff.id = widget.staff!.id;
-        staff.firestoreId = widget.staff!.firestoreId;
-        await _staffService.updateStaff(widget.staff!.id!, staff, schoolId ?? 0);
-        _showSnackBar('Employé modifié avec succès', const Color(0xFF10B981));
-      }
-
-      Navigator.pop(context, true);
-    } catch (e) {
-      _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
-    } finally {
+    // 🔥 Vérification que schoolId n'est pas null
+    if (schoolId == null) {
+      _showSnackBar('Erreur: École non identifiée', const Color(0xFFEF4444));
       setState(() => _isLoading = false);
+      return;
     }
-  }
 
+    final staff = StaffModel(
+      fullName: _nameController.text.trim(),
+      position: _selectedPosition,
+      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+      hireDate: _selectedHireDate,
+      salary: double.tryParse(_salaryController.text) ?? 0,
+      isActive: _isActive,
+      schoolId: schoolId,  // 🔥 String
+    );
+
+  if (widget.staff == null) {
+  // Convertir String en int si addStaff attend int
+  final int schoolIdInt = int.tryParse(schoolId ?? '0') ?? 0;
+  await _staffService.addStaff(staff, schoolId);
+  _showSnackBar('Employé ajouté avec succès', const Color(0xFF10B981));
+} else {
+  staff.id = widget.staff!.id;
+  staff.firestoreId = widget.staff!.firestoreId;
+  final int schoolIdInt = int.tryParse(schoolId ?? '0') ?? 0;
+  await _staffService.updateStaff(widget.staff!.id!, staff, schoolId);
+  _showSnackBar('Employé modifié avec succès', const Color(0xFF10B981));
+}
+
+    Navigator.pop(context, true);
+  } catch (e) {
+    _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

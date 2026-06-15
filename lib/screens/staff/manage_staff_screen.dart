@@ -1,5 +1,3 @@
-// lib/screens/staff/manage_staff_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/db_helper.dart';
@@ -64,15 +62,17 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
     
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      final schoolId = auth.currentSchoolId;
+      final String? schoolId = auth.currentSchoolId;
       
       if (auth.isSuperAdmin) {
         _staffList = await _staffService.getAllStaff();
-      } else if (schoolId != null) {
+      } else if (schoolId != null && schoolId.isNotEmpty) {
+        // ✅ Passer schoolId directement comme String
         _staffList = await _staffService.getStaffBySchool(schoolId);
       }
       
-      await _staffService.syncAllStaffToFirestore(schoolId?.toString() ?? '');
+      // ✅ Synchronisation avec Firestore (utilise schoolId comme String)
+      await _staffService.syncAllStaffToFirestore(schoolId ?? '');
       
       _filterStaff();
       _animationController.forward(from: 0);
@@ -132,7 +132,11 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
 
     if (confirm == true) {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      await _staffService.deleteStaff(staff.id!, staff.fullName, auth.currentSchoolId ?? 0);
+      final String? schoolId = auth.currentSchoolId;
+      
+      // ✅ Passer schoolId comme String (pas de conversion en int)
+      await _staffService.deleteStaff(staff.id!, staff.fullName, schoolId ?? '');
+      
       await _loadStaff();
       _showSnackBar('Personnel supprimé', const Color(0xFF10B981));
     }
@@ -405,12 +409,12 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                               Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                 builder: (context) => StaffPaymentsScreen(staff: {
-  'firestoreId': staff.firestoreId,
-  'fullName': staff.fullName,
-  'position': staff.position,
-  'salary': staff.salary,
-}),
+                                                  builder: (context) => StaffPaymentsScreen(staff: {
+                                                    'firestoreId': staff.firestoreId,
+                                                    'fullName': staff.fullName,
+                                                    'position': staff.position,
+                                                    'salary': staff.salary,
+                                                  }),
                                                 ),
                                               );
                                             },

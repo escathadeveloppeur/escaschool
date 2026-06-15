@@ -1,8 +1,26 @@
 // lib/screens/admin/admin_messages_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
+
+// ===================== PALETTE / THEME HELPERS =====================
+class _AppColors {
+  static const Color primary = Color(0xFF1E3A8A);
+  static const Color primaryLight = Color(0xFF3B5BDB);
+  static const Color background = Color(0xFFF4F6FB);
+  static const Color cardBorder = Color(0xFFE6E9F2);
+  static const Color textDark = Color(0xFF1F2937);
+  static const Color textMuted = Color(0xFF6B7280);
+  
+  // Couleurs pour les rôles
+  static const Color teacherColor = Color(0xFF3B82F6);
+  static const Color studentColor = Color(0xFF10B981);
+  static const Color parentColor = Color(0xFFF59E0B);
+  static const Color staffColor = Color(0xFF8B5CF6);
+  static const Color adminColor = Color(0xFFEF4444);
+}
 
 class AdminMessagesScreen extends StatefulWidget {
   const AdminMessagesScreen({super.key});
@@ -56,40 +74,31 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
       final adminName = auth.user?.name ?? auth.user?.email ?? 'Administrateur';
       final schoolId = auth.currentSchoolId;
       
-      print('\n╔════════════════════════════════════════════════════════════╗');
-      print('║     CHARGEMENT ADMIN MESSAGES                              ║');
-      print('╚════════════════════════════════════════════════════════════╝\n');
-      print('📌 ADMIN FIRESTORE ID: $adminFirestoreId');
-      print('📌 ADMIN NAME: $adminName');
-      print('📌 SCHOOL ID: $schoolId');
-      
       adminInfo = {
         'id': adminFirestoreId,
         'name': adminName,
         'role': 'admin',
       };
       
-      await _loadTeachers(schoolId.toString());
-      await _loadStudents(schoolId.toString());
-      await _loadParents(schoolId.toString());
-      await _loadStaffs(schoolId.toString());
+      await _loadTeachers(schoolId?.toString());
+      await _loadStudents(schoolId?.toString());
+      await _loadParents();
+      await _loadStaffs();
       await _loadConversations(adminFirestoreId);
       
       _animationController.forward();
     } catch (e) {
       print('❌ Erreur: $e');
-      _showSnackBar('Erreur de chargement', Colors.red);
+      _showSnackBar('Erreur de chargement', const Color(0xFFEF4444));
     } finally {
       setState(() => _isLoading = false);
     }
   }
   
   Future<void> _loadTeachers(String? schoolId) async {
-    print('\n🔍 CHARGEMENT DES PROFESSEURS');
     Query query = FirebaseFirestore.instance.collection('professors');
     if (schoolId != null) {
       query = query.where('schoolId', isEqualTo: int.tryParse(schoolId) ?? 0);
-      print('   Filtre schoolId = $schoolId');
     }
     final snapshot = await query.get();
     
@@ -101,17 +110,13 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         'name': data['fullName'] ?? 'Professeur',
         'specialty': data['specialty'] ?? '',
       });
-      print('   - ${data['fullName']} (ID: ${doc.id})');
     }
-    print('   ✅ ${teachers.length} professeur(s)');
   }
   
   Future<void> _loadStudents(String? schoolId) async {
-    print('\n🔍 CHARGEMENT DES ÉLÈVES');
     Query query = FirebaseFirestore.instance.collection('students');
     if (schoolId != null) {
       query = query.where('schoolId', isEqualTo: int.tryParse(schoolId) ?? 0);
-      print('   Filtre schoolId = $schoolId');
     }
     final snapshot = await query.get();
     
@@ -123,13 +128,10 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         'name': data['fullName'] ?? 'Élève',
         'className': data['className'] ?? '',
       });
-      print('   - ${data['fullName']} (ID: ${doc.id})');
     }
-    print('   ✅ ${students.length} élève(s)');
   }
   
-  Future<void> _loadParents(String? schoolId) async {
-    print('\n🔍 CHARGEMENT DES PARENTS');
+  Future<void> _loadParents() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'parent')
@@ -142,13 +144,10 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         'id': doc.id,
         'name': data['name'] ?? data['email'] ?? 'Parent',
       });
-      print('   - ${data['name'] ?? data['email']} (ID: ${doc.id})');
     }
-    print('   ✅ ${parents.length} parent(s)');
   }
   
-  Future<void> _loadStaffs(String? schoolId) async {
-    print('\n🔍 CHARGEMENT DU STAFF');
+  Future<void> _loadStaffs() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('staff')
         .get();
@@ -161,16 +160,11 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         'name': data['fullName'] ?? data['name'] ?? 'Personnel',
         'role': data['role'] ?? '',
       });
-      print('   - ${data['fullName'] ?? data['name']} (ID: ${doc.id})');
     }
-    print('   ✅ ${staffs.length} personnel(s)');
   }
   
   Future<void> _loadConversations(String? adminFirestoreId) async {
     if (adminFirestoreId == null) return;
-    
-    print('\n🔍 CHARGEMENT DES CONVERSATIONS');
-    print('   🔑 Utilisation de adminFirestoreId: $adminFirestoreId');
     
     final receivedSnapshot = await FirebaseFirestore.instance
         .collection('messages')
@@ -184,12 +178,8 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         .where('senderId', isEqualTo: adminFirestoreId)
         .get();
     
-    print('   📥 Messages reçus: ${receivedSnapshot.docs.length}');
-    print('   📤 Messages envoyés: ${sentSnapshot.docs.length}');
-    
     conversationMap = {};
     
-    // Traiter les messages reçus
     for (var doc in receivedSnapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
       final senderId = data['senderId'] ?? '';
@@ -207,7 +197,6 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
           'lastDate': data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : DateTime.now(),
           'unreadCount': data['read'] == false ? 1 : 0,
         };
-        print('   📁 Nouvelle conversation: $senderName ($senderRole)');
       } else {
         final existing = conversationMap[conversationId]!;
         final msgDate = data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : DateTime.now();
@@ -221,7 +210,6 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
       }
     }
     
-    // Traiter les messages envoyés
     for (var doc in sentSnapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
       final recipientId = data['recipientId'] ?? '';
@@ -239,7 +227,6 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
           'lastDate': data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : DateTime.now(),
           'unreadCount': 0,
         };
-        print('   📁 Nouvelle conversation (envoi): $recipientName ($recipientRole)');
       } else {
         final existing = conversationMap[conversationId]!;
         final msgDate = data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : DateTime.now();
@@ -252,8 +239,6 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
     
     conversations = conversationMap.values.toList();
     conversations.sort((a, b) => b['lastDate'].compareTo(a['lastDate']));
-    
-    print('   ✅ ${conversations.length} conversation(s) chargée(s)\n');
   }
   
   Future<void> _markMessagesAsRead(String contactId, String adminFirestoreId) async {
@@ -275,7 +260,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
     final content = _contentController.text.trim();
     
     if (content.isEmpty || _selectedConversation == null || adminFirestoreId == null) {
-      _showSnackBar('Veuillez écrire un message', Colors.orange);
+      _showSnackBar('Veuillez écrire un message', const Color(0xFFF59E0B));
       return;
     }
     
@@ -300,10 +285,9 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
       _contentController.clear();
       await _loadConversations(adminFirestoreId);
       
-      _showSnackBar('Message envoyé', Colors.green);
-      
+      _showSnackBar('Message envoyé', const Color(0xFF10B981));
     } catch (e) {
-      _showSnackBar('Erreur: $e', Colors.red);
+      _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
     } finally {
       setState(() => _isSending = false);
     }
@@ -327,7 +311,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                 children: [
                   _buildDragHandle(),
                   const SizedBox(height: 16),
-                  _buildDialogHeader('Nouveau message', Icons.edit),
+                  _buildDialogHeader('Nouveau message', Icons.edit_rounded),
                   const SizedBox(height: 16),
                   
                   Expanded(
@@ -336,19 +320,15 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Section Professeurs
                           if (teachers.isNotEmpty) ...[
-                            const Text(
-                              'PROFESSEURS',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue),
-                            ),
+                            _buildSectionHeader('PROFESSEURS', _AppColors.teacherColor),
                             const SizedBox(height: 8),
                             ...teachers.map((teacher) => _buildContactTile(
                               name: teacher['name'],
                               role: 'teacher',
                               subtitle: teacher['specialty'],
-                              icon: Icons.school,
-                              color: Colors.blue,
+                              icon: Icons.school_rounded,
+                              color: _AppColors.teacherColor,
                               onTap: () {
                                 setState(() {
                                   _selectedConversation = {
@@ -364,19 +344,15 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                             const SizedBox(height: 16),
                           ],
                           
-                          // Section Élèves
                           if (students.isNotEmpty) ...[
-                            const Text(
-                              'ÉLÈVES',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.green),
-                            ),
+                            _buildSectionHeader('ÉLÈVES', _AppColors.studentColor),
                             const SizedBox(height: 8),
                             ...students.map((student) => _buildContactTile(
                               name: student['name'],
                               role: 'student',
                               subtitle: student['className'],
-                              icon: Icons.child_care,
-                              color: Colors.green,
+                              icon: Icons.child_care_rounded,
+                              color: _AppColors.studentColor,
                               onTap: () {
                                 setState(() {
                                   _selectedConversation = {
@@ -392,19 +368,15 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                             const SizedBox(height: 16),
                           ],
                           
-                          // Section Parents
                           if (parents.isNotEmpty) ...[
-                            const Text(
-                              'PARENTS',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.orange),
-                            ),
+                            _buildSectionHeader('PARENTS', _AppColors.parentColor),
                             const SizedBox(height: 8),
                             ...parents.map((parent) => _buildContactTile(
                               name: parent['name'],
                               role: 'parent',
                               subtitle: '',
-                              icon: Icons.family_restroom,
-                              color: Colors.orange,
+                              icon: Icons.family_restroom_rounded,
+                              color: _AppColors.parentColor,
                               onTap: () {
                                 setState(() {
                                   _selectedConversation = {
@@ -420,19 +392,15 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                             const SizedBox(height: 16),
                           ],
                           
-                          // Section Personnel
                           if (staffs.isNotEmpty) ...[
-                            const Text(
-                              'PERSONNEL',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.purple),
-                            ),
+                            _buildSectionHeader('PERSONNEL', _AppColors.staffColor),
                             const SizedBox(height: 8),
                             ...staffs.map((staff) => _buildContactTile(
                               name: staff['name'],
                               role: 'staff',
                               subtitle: staff['role'],
-                              icon: Icons.person,
-                              color: Colors.purple,
+                              icon: Icons.person_rounded,
+                              color: _AppColors.staffColor,
                               onTap: () {
                                 setState(() {
                                   _selectedConversation = {
@@ -448,16 +416,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                           ],
                           
                           if (teachers.isEmpty && students.isEmpty && parents.isEmpty && staffs.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.person_off, size: 48, color: Colors.grey[400]),
-                                  const SizedBox(height: 8),
-                                  Text('Aucun contact disponible', style: TextStyle(color: Colors.grey[500])),
-                                ],
-                              ),
-                            ),
+                            _buildEmptyContactsState(),
                         ],
                       ),
                     ),
@@ -471,35 +430,80 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
     );
   }
   
+  Widget _buildSectionHeader(String title, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: color,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+  
   Widget _buildContactTile({
     required String name,
     required String role,
     required String subtitle,
     required IconData icon,
     required Color color,
-    bool isSelected = false,
     required VoidCallback onTap,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: isSelected ? color.withOpacity(0.1) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: isSelected ? Border.all(color: color, width: 1) : null,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _AppColors.cardBorder),
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color,
-          child: Icon(icon, color: Colors.white, size: 20),
+          backgroundColor: color.withOpacity(0.1),
+          child: Icon(icon, color: color, size: 20),
         ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
+        title: Text(name, style: TextStyle(fontWeight: FontWeight.w600, color: _AppColors.textDark)),
         subtitle: subtitle.isNotEmpty 
-            ? Text(subtitle, style: const TextStyle(fontSize: 12))
+            ? Text(subtitle, style: TextStyle(fontSize: 12, color: _AppColors.textMuted))
             : null,
-        trailing: isSelected 
-            ? Icon(Icons.check_circle, color: color, size: 18)
-            : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: _AppColors.textMuted),
         onTap: onTap,
+      ),
+    );
+  }
+  
+  Widget _buildEmptyContactsState() {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _AppColors.primary.withOpacity(0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.person_off_rounded, size: 48, color: _AppColors.primary.withOpacity(0.4)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Aucun contact disponible',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _AppColors.textMuted),
+          ),
+        ],
       ),
     );
   }
@@ -563,34 +567,8 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
               children: [
                 _buildDragHandle(),
                 const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: _getRoleColor(_selectedConversation!['role']),
-                        child: Icon(_getRoleIcon(_selectedConversation!['role']), color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _selectedConversation!['name'],
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              _getRoleLabel(_selectedConversation!['role']),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
+                _buildConversationHeader(),
+                const Divider(height: 1, color: _AppColors.cardBorder),
                 
                 Expanded(
                   child: ListView.builder(
@@ -599,84 +577,155 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[messages.length - 1 - index];
-                      return Align(
-                        alignment: msg['isMe'] ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: msg['isMe'] ? const Color(0xFF10B981) : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                msg['text'],
-                                style: TextStyle(
-                                  color: msg['isMe'] ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatTime(msg['date']),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: msg['isMe'] ? Colors.white70 : Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
+                      return _buildMessageBubble(msg);
                     },
                   ),
                 ),
                 
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _contentController,
-                          decoration: InputDecoration(
-                            hintText: 'Écrire un message...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(25),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Colors.grey[100],
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          ),
-                          maxLines: 3,
-                          minLines: 1,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF10B981),
-                        child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                          onPressed: _isSending ? null : () async {
-                            await _sendMessage(adminFirestoreId, adminName);
-                            setStateBottomSheet(() {});
-                            await _loadConversations(adminFirestoreId);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildMessageInput(adminFirestoreId, adminName, setStateBottomSheet),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+  
+  Widget _buildConversationHeader() {
+    final role = _selectedConversation!['role'];
+    final color = _getRoleColor(role);
+    final icon = _getRoleIcon(role);
+    final label = _getRoleLabel(role);
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color, color.withOpacity(0.7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Icon(icon, color: Colors.white, size: 24)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedConversation!['name'],
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildMessageBubble(Map<String, dynamic> message) {
+    final isMe = message['isMe'] as bool;
+    final color = isMe ? const Color(0xFF10B981) : _AppColors.background;
+    final textColor = isMe ? Colors.white : _AppColors.textDark;
+    
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          border: isMe ? null : Border.all(color: _AppColors.cardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              message['text'],
+              style: TextStyle(color: textColor, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatTime(message['date']),
+              style: TextStyle(
+                fontSize: 10,
+                color: isMe ? Colors.white70 : _AppColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildMessageInput(String adminFirestoreId, String adminName, StateSetter setStateBottomSheet) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: _AppColors.background,
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: _AppColors.cardBorder),
+              ),
+              child: TextField(
+                controller: _contentController,
+                decoration: InputDecoration(
+                  hintText: 'Écrire un message...',
+                  hintStyle: TextStyle(color: _AppColors.textMuted),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                maxLines: 3,
+                minLines: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              onPressed: _isSending ? null : () async {
+                await _sendMessage(adminFirestoreId, adminName);
+                setStateBottomSheet(() {});
+                await _loadConversations(adminFirestoreId);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -688,7 +737,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
         width: 40,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.grey[300],
+          color: _AppColors.cardBorder,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -701,15 +750,18 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFF10B981).withOpacity(0.1),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: const Color(0xFF10B981), size: 22),
+            child: Icon(icon, color: const Color(0xFF10B981), size: 24),
           ),
           const SizedBox(width: 14),
-          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: _AppColors.textDark),
+          ),
         ],
       ),
     );
@@ -743,23 +795,23 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
   
   Color _getRoleColor(String role) {
     switch (role) {
-      case 'teacher': return Colors.blue;
-      case 'student': return Colors.green;
-      case 'parent': return Colors.orange;
-      case 'staff': return Colors.purple;
-      case 'admin': return Colors.red;
+      case 'teacher': return _AppColors.teacherColor;
+      case 'student': return _AppColors.studentColor;
+      case 'parent': return _AppColors.parentColor;
+      case 'staff': return _AppColors.staffColor;
+      case 'admin': return _AppColors.adminColor;
       default: return Colors.grey;
     }
   }
   
   IconData _getRoleIcon(String role) {
     switch (role) {
-      case 'teacher': return Icons.school;
-      case 'student': return Icons.child_care;
-      case 'parent': return Icons.family_restroom;
-      case 'staff': return Icons.person;
-      case 'admin': return Icons.admin_panel_settings;
-      default: return Icons.person;
+      case 'teacher': return Icons.school_rounded;
+      case 'student': return Icons.child_care_rounded;
+      case 'parent': return Icons.family_restroom_rounded;
+      case 'staff': return Icons.person_rounded;
+      case 'admin': return Icons.admin_panel_settings_rounded;
+      default: return Icons.person_rounded;
     }
   }
   
@@ -773,7 +825,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
       default: return 'Inconnu';
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -782,18 +834,29 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
     final unreadCount = conversations.fold<int>(0, (sum, c) => sum + (c['unreadCount'] as int));
     
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: _AppColors.background,
       appBar: AppBar(
-        title: const Text('Messages', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
         elevation: 0,
-        centerTitle: false,
+        title: const Text(
+          'Messages',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 19, letterSpacing: 0.2),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_AppColors.primary, _AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.message_outlined),
+                icon: const Icon(Icons.message_rounded),
                 onPressed: () {},
+                tooltip: 'Messages',
               ),
               if (unreadCount > 0)
                 Positioned(
@@ -801,49 +864,87 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10), textAlign: TextAlign.center),
+                    child: Text(
+                      unreadCount > 9 ? '9+' : '$unreadCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: "Actualiser",
             onPressed: () => _loadData(),
           ),
           IconButton(
-            icon: const Icon(Icons.edit, color: Color(0xFF10B981)),
+            icon: const Icon(Icons.edit_rounded, color: Color(0xFF10B981)),
+            tooltip: "Nouveau message",
             onPressed: () => _showNewConversationDialog(adminFirestoreId!, adminName),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(_AppColors.primary),
+              ),
+            )
           : Column(
               children: [
+                const SizedBox(height: 12),
+                
+                // Profil admin
                 Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: _AppColors.cardBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.red[100],
-                        child: const Icon(Icons.admin_panel_settings, size: 20, color: Colors.red),
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFEF4444), Color(0xFFF97316)],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 22),
+                        ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(adminName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                            Text('Administrateur', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                            Text(
+                              adminName,
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: _AppColors.textDark),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Administrateur',
+                              style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
+                            ),
                           ],
                         ),
                       ),
@@ -851,100 +952,176 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen>
                   ),
                 ),
                 
+                const SizedBox(height: 16),
+                
+                // Compteur conversations
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.chat_bubble_outline_rounded, size: 18, color: _AppColors.primary),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Conversations (${conversations.length})",
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _AppColors.textDark),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Liste des conversations
                 Expanded(
                   child: conversations.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[300]),
-                              const SizedBox(height: 16),
-                              Text('Aucune conversation', style: TextStyle(color: Colors.grey[500])),
-                              const SizedBox(height: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => _showNewConversationDialog(adminFirestoreId!, adminName),
-                                icon: const Icon(Icons.edit),
-                                label: const Text('Nouveau message'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF10B981),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
+                      ? _buildEmptyConversationsState(adminFirestoreId, adminName)
                       : ListView.builder(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                           itemCount: conversations.length,
                           itemBuilder: (context, index) {
                             final conv = conversations[index];
-                            final unread = conv['unreadCount'] as int;
-                            
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedConversation = conv;
-                                });
-                                _showConversationDetail(adminFirestoreId!, adminName);
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: _getRoleColor(conv['role']),
-                                    child: Icon(_getRoleIcon(conv['role']), color: Colors.white, size: 20),
-                                  ),
-                                  title: Text(
-                                    conv['name'],
-                                    style: TextStyle(
-                                      fontWeight: unread > 0 ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    conv['lastMessage'],
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: unread > 0 ? Colors.black87 : Colors.grey[600],
-                                    ),
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        _formatDate(conv['lastDate']),
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                      ),
-                                      if (unread > 0)
-                                        Container(
-                                          margin: const EdgeInsets.only(top: 4),
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF10B981),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                                          child: Text(
-                                            '$unread',
-                                            style: const TextStyle(color: Colors.white, fontSize: 10),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
+                            return _buildConversationCard(conv, adminFirestoreId!, adminName);
                           },
                         ),
                 ),
               ],
             ),
+    );
+  }
+  
+  Widget _buildEmptyConversationsState(String? adminFirestoreId, String adminName) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _AppColors.primary.withOpacity(0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.chat_bubble_outline_rounded, size: 56, color: _AppColors.primary.withOpacity(0.4)),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Aucune conversation',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _AppColors.textDark),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Commencez un nouveau message',
+            style: TextStyle(fontSize: 13, color: _AppColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _showNewConversationDialog(adminFirestoreId!, adminName),
+            icon: const Icon(Icons.edit_rounded, size: 18),
+            label: const Text('Nouveau message'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildConversationCard(Map<String, dynamic> conversation, String adminFirestoreId, String adminName) {
+    final unread = conversation['unreadCount'] as int;
+    final role = conversation['role'];
+    final color = _getRoleColor(role);
+    final icon = _getRoleIcon(role);
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedConversation = conversation;
+        });
+        _showConversationDetail(adminFirestoreId, adminName);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _AppColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color, color.withOpacity(0.7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Icon(icon, color: Colors.white, size: 24)),
+          ),
+          title: Text(
+            conversation['name'],
+            style: TextStyle(
+              fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w600,
+              fontSize: 15,
+              color: _AppColors.textDark,
+            ),
+          ),
+          subtitle: Text(
+            conversation['lastMessage'],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              color: unread > 0 ? _AppColors.textDark : _AppColors.textMuted,
+            ),
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _formatDate(conversation['lastDate']),
+                style: TextStyle(fontSize: 10, color: _AppColors.textMuted),
+              ),
+              if (unread > 0)
+                Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 // lib/screens/admin/professor_permissions.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,11 +10,15 @@ import '../../providers/auth_provider.dart';
 class ProfessorPermissionsScreen extends StatefulWidget {
   final String professorFirestoreId;
   final String professorName;
+  final bool isHomeroomTeacher;  // NOUVEAU: est-ce un professeur titulaire ?
+  final String? homeroomClassId;  // NOUVEAU: sa classe titulaire
 
   const ProfessorPermissionsScreen({
     super.key,
     required this.professorFirestoreId,
     required this.professorName,
+    this.isHomeroomTeacher = false,
+    this.homeroomClassId,
   });
 
   @override
@@ -66,7 +71,6 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
     });
   }
 
-  /// 🔥 Charger les classes et permissions depuis Firestore
   Future<void> _loadDataFromFirestore() async {
     setState(() => _loading = true);
 
@@ -74,7 +78,12 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
     print('║     CHARGEMENT DES PERMISSIONS PROFESSEUR                  ║');
     print('╚════════════════════════════════════════════════════════════╝\n');
     print('📌 Firestore ID Professeur: ${widget.professorFirestoreId}');
-    print('📌 Nom Professeur: ${widget.professorName}\n');
+    print('📌 Nom Professeur: ${widget.professorName}');
+    print('📌 Est titulaire: ${widget.isHomeroomTeacher}');
+    if (widget.isHomeroomTeacher) {
+      print('📌 Classe titulaire: ${widget.homeroomClassId}');
+    }
+    print('');
 
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -103,7 +112,7 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
         print('   📚 Classe: ${data['className']} (ID: ${doc.id})');
       }
       
-      // Charger les permissions du professeur depuis Firestore
+      // Charger les permissions du professeur
       print('\n🔍 [2/2] Chargement des permissions...');
       final permissionsSnapshot = await FirebaseFirestore.instance
           .collection('professor_permissions')
@@ -149,7 +158,59 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
     );
   }
 
-  /// 🔥 Accorder une permission dans Firestore
+  /// NOUVEAU: Définir le professeur comme titulaire d'une classe
+  Future<void> _setAsHomeroomTeacher(String classFirestoreId, String className) async {
+    print('\n🏫 SET AS HOMEROOM TEACHER');
+    print('   → Professeur ID: ${widget.professorFirestoreId}');
+    print('   → Classe ID: $classFirestoreId');
+    print('   → Classe: $className');
+    
+    try {
+      // Mettre à jour le professeur dans Firestore
+      await FirebaseFirestore.instance
+          .collection('professors')
+          .doc(widget.professorFirestoreId)
+          .update({
+            'isHomeroomTeacher': true,
+            'homeroomClassId': classFirestoreId,
+            'homeroomClassName': className,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      
+      // Donner automatiquement les permissions complètes pour cette classe
+      await _grantPermission(classFirestoreId, className, 'full');
+      
+      _showSnackBar('${widget.professorName} est maintenant titulaire de $className', const Color(0xFF8B5CF6));
+      await _loadDataFromFirestore();
+    } catch (e) {
+      print('❌ Erreur: $e');
+      _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
+    }
+  }
+
+  /// NOUVEAU: Retirer le statut de titulaire
+  Future<void> _removeHomeroomTeacher() async {
+    print('\n🏫 REMOVE HOMEROOM TEACHER');
+    
+    try {
+      await FirebaseFirestore.instance
+          .collection('professors')
+          .doc(widget.professorFirestoreId)
+          .update({
+            'isHomeroomTeacher': false,
+            'homeroomClassId': null,
+            'homeroomClassName': null,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      
+      _showSnackBar('${widget.professorName} n\'est plus titulaire', const Color(0xFFF59E0B));
+      await _loadDataFromFirestore();
+    } catch (e) {
+      print('❌ Erreur: $e');
+      _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
+    }
+  }
+
   Future<void> _grantPermission(String classFirestoreId, String className, String permissionType) async {
     print('\n🔐 GRANT PERMISSION');
     print('   → Professeur ID: ${widget.professorFirestoreId}');
@@ -166,17 +227,15 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
         'createdAt': FieldValue.serverTimestamp(),
       };
       
-      final docRef = await FirebaseFirestore.instance.collection('professor_permissions').add(permissionData);
+      await FirebaseFirestore.instance.collection('professor_permissions').add(permissionData);
       await _loadDataFromFirestore();
       _showSnackBar('Accès accordé à $className ($permissionType)', const Color(0xFF10B981));
-      print('✅ Permission créée avec ID: ${docRef.id}');
     } catch (e) {
       print('❌ Erreur: $e');
       _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
     }
   }
 
-  /// 🔥 Retirer une permission de Firestore
   Future<void> _revokePermission(String permissionFirestoreId, String className) async {
     print('\n🔐 REVOKE PERMISSION');
     print('   → Permission ID: $permissionFirestoreId');
@@ -190,7 +249,6 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
       
       await _loadDataFromFirestore();
       _showSnackBar('Accès retiré de $className', const Color(0xFFF59E0B));
-      print('✅ Permission supprimée');
     } catch (e) {
       print('❌ Erreur: $e');
       _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
@@ -351,6 +409,45 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981))))
           : Column(
               children: [
+                // Bannière pour professeur titulaire
+                if (widget.isHomeroomTeacher)
+                  Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)]),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.star, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('PROFESSEUR TITULAIRE', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text('Classe: ${widget.homeroomClassId ?? 'Non définie'}', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _removeHomeroomTeacher,
+                          icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                          label: const Text('Retirer', style: TextStyle(color: Colors.white)),
+                          style: TextButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 if (!isSuperAdmin && _allClasses.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -418,14 +515,22 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
                             final hasPerm = _hasPermission(classFirestoreId);
                             final permType = _getPermissionType(classFirestoreId);
                             final permColor = _getPermissionColor(permType);
+                            
+                            // Vérifier si c'est la classe titulaire
+                            final isHomeroomClass = widget.isHomeroomTeacher && widget.homeroomClassId == classFirestoreId;
 
                             return FadeTransition(
                               opacity: _animationController,
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 decoration: BoxDecoration(
-                                  color: hasPerm ? permColor.withOpacity(0.05) : Colors.white,
+                                  color: isHomeroomClass 
+                                      ? const Color(0xFF8B5CF6).withOpacity(0.1)
+                                      : (hasPerm ? permColor.withOpacity(0.05) : Colors.white),
                                   borderRadius: BorderRadius.circular(16),
+                                  border: isHomeroomClass
+                                      ? Border.all(color: const Color(0xFF8B5CF6), width: 2)
+                                      : null,
                                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
                                 ),
                                 child: ListTile(
@@ -434,13 +539,30 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
                                     width: 48, height: 48,
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
-                                        colors: hasPerm ? [permColor, permColor.withOpacity(0.7)] : [Colors.grey[400]!, Colors.grey[500]!],
+                                        colors: isHomeroomClass
+                                            ? [const Color(0xFF8B5CF6), const Color(0xFF7C3AED)]
+                                            : (hasPerm ? [permColor, permColor.withOpacity(0.7)] : [Colors.grey[400]!, Colors.grey[500]!]),
                                       ),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Center(child: Text(className.isNotEmpty ? className[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold))),
                                   ),
-                                  title: Text(className, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                  title: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(className, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                      ),
+                                      if (isHomeroomClass)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF8B5CF6),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: const Text('Titulaire', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                        ),
+                                    ],
+                                  ),
                                   subtitle: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -454,30 +576,38 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
                                       ),
                                     ],
                                   ),
-                                  trailing: hasPerm
-                                      ? Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            InkWell(
-                                              onTap: () => _showPermissionDialog(classFirestoreId, className, permType),
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                decoration: BoxDecoration(color: permColor.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-                                                child: Text(_getPermissionLabel(permType), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: permColor)),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            IconButton(
-                                              icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 22),
-                                              onPressed: () {
-                                                final permId = _getPermissionFirestoreId(classFirestoreId);
-                                                if (permId != null) _revokePermission(permId, className);
-                                              },
-                                              tooltip: 'Retirer accès',
-                                            ),
-                                          ],
-                                        )
-                                      : ElevatedButton.icon(
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Bouton pour définir comme classe titulaire (si pas déjà titulaire)
+                                      if (!widget.isHomeroomTeacher && !hasPerm)
+                                        TextButton.icon(
+                                          onPressed: () => _setAsHomeroomTeacher(classFirestoreId, className),
+                                          icon: const Icon(Icons.star, size: 16, color: Color(0xFF8B5CF6)),
+                                          label: const Text('Nommer titulaire', style: TextStyle(fontSize: 12, color: Color(0xFF8B5CF6))),
+                                          style: TextButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+                                        ),
+                                      if (hasPerm && !isHomeroomClass) ...[
+                                        InkWell(
+                                          onTap: () => _showPermissionDialog(classFirestoreId, className, permType),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(color: permColor.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                                            child: Text(_getPermissionLabel(permType), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: permColor)),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 22),
+                                          onPressed: () {
+                                            final permId = _getPermissionFirestoreId(classFirestoreId);
+                                            if (permId != null) _revokePermission(permId, className);
+                                          },
+                                          tooltip: 'Retirer accès',
+                                        ),
+                                      ],
+                                      if (!hasPerm && !widget.isHomeroomTeacher)
+                                        ElevatedButton.icon(
                                           onPressed: () => _grantPermission(classFirestoreId, className, 'view'),
                                           icon: const Icon(Icons.add, size: 18),
                                           label: const Text('Accès'),
@@ -487,6 +617,8 @@ class _ProfessorPermissionsScreenState extends State<ProfessorPermissionsScreen>
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
                                         ),
+                                    ],
+                                  ),
                                   onTap: hasPerm ? () => _showPermissionDialog(classFirestoreId, className, permType) : null,
                                 ),
                               ),

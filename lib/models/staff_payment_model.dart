@@ -48,7 +48,7 @@ class StaffPaymentModel extends HiveObject {
   String? notes;
   
   @HiveField(13)
-  int schoolId;
+  String schoolId;
   
   @HiveField(14)
   DateTime? createdAt;
@@ -111,7 +111,7 @@ class StaffPaymentModel extends HiveObject {
       paymentMethod: map['paymentMethod'] ?? 'Espèces',
       reference: map['reference'],
       notes: map['notes'],
-      schoolId: map['schoolId'] ?? 0,
+      schoolId: map['schoolId'] ?? '',
       createdAt: map['createdAt'] != null ? DateTime.tryParse(map['createdAt']) : null,
       firestoreId: map['firestoreId'],
     );

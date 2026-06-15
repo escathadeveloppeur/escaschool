@@ -19,13 +19,21 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
   final DBHelper db = DBHelper();
   final _formKey = GlobalKey<FormState>();
 
-  List<Map<String, dynamic>> students = [];
+  List<Map<String, dynamic>> allStudents = [];
+  List<Map<String, dynamic>> filteredStudents = [];
   List<Map<String, dynamic>> classes = [];
   Map<String, dynamic>? selectedStudent;
   Map<String, dynamic>? selectedClass;
   String docType = "Bulletin scolaire";
   bool isValidated = false;
   bool _loading = true;
+  String _selectedCycle = 'all'; // 'all', 'primaire', 'secondaire'
+
+  final List<Map<String, dynamic>> _cycles = [
+    {'id': 'all', 'name': 'Tous', 'icon': Icons.all_inclusive, 'color': Color(0xFF6366F1)},
+    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': Color(0xFF10B981)},
+    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': Color(0xFF8B5CF6)},
+  ];
 
   @override
   void initState() {
@@ -53,15 +61,20 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
       }
       
       final studentsSnapshot = await studentQuery.get();
-      students = studentsSnapshot.docs.map((doc) {
+      allStudents = studentsSnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return {
           'firestoreId': doc.id,
           'fullName': data['fullName'] ?? '',
           'className': data['className'] ?? '',
+          'classCycleType': data['classCycleType'] ?? 'primaire',
+          'sectionName': data['sectionName'],
           'schoolId': data['schoolId'],
         };
       }).toList();
+      
+      // Filtrer les étudiants par cycle
+      _filterStudentsByCycle();
       
       // 2. Charger les classes disponibles
       Query classQuery = FirebaseFirestore.instance.collection('classes');
@@ -77,12 +90,13 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
           'className': data['className'] ?? '',
           'level': data['level'] ?? '',
           'year': data['year'] ?? '',
+          'cycleType': data['cycleType'] ?? 'primaire',
         };
       }).toList();
       
       // 3. Si en mode édition, pré-sélectionner
       if (widget.document != null) {
-        selectedStudent = students.firstWhere(
+        selectedStudent = allStudents.firstWhere(
           (s) => s['fullName'] == widget.document!['fullName'],
           orElse: () => {},
         );
@@ -92,9 +106,14 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
         );
         docType = widget.document!['docType'] ?? "Bulletin scolaire";
         isValidated = widget.document!['isValidated'] ?? false;
+        
+        // Définir le cycle en fonction de l'étudiant
+        if (selectedStudent != null) {
+          _selectedCycle = selectedStudent!['classCycleType'] ?? 'all';
+        }
       }
       
-      print('✅ ${students.length} étudiants chargés');
+      print('✅ ${allStudents.length} étudiants chargés');
       print('✅ ${classes.length} classes chargées');
     } catch (e) {
       print('❌ Erreur chargement: $e');
@@ -102,6 +121,26 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  void _filterStudentsByCycle() {
+    setState(() {
+      if (_selectedCycle == 'all') {
+        filteredStudents = List.from(allStudents);
+      } else {
+        filteredStudents = allStudents.where((student) {
+          final studentCycle = student['classCycleType'] ?? 'primaire';
+          return studentCycle == _selectedCycle;
+        }).toList();
+      }
+      
+      // Réinitialiser la sélection si l'étudiant n'est plus dans la liste filtrée
+      if (selectedStudent != null && 
+          !filteredStudents.any((s) => s['firestoreId'] == selectedStudent!['firestoreId'])) {
+        selectedStudent = null;
+        selectedClass = null;
+      }
+    });
   }
 
   void _showSnackBar(String message, Color color) {
@@ -132,6 +171,8 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
       'fullName': selectedStudent!['fullName'],
       'classFirestoreId': selectedClass!['firestoreId'],
       'className': selectedClass!['className'],
+      'classCycleType': selectedStudent!['classCycleType'] ?? 'primaire',
+      'sectionName': selectedStudent!['sectionName'],
       'docType': docType,
       'isValidated': isValidated,
       'schoolId': schoolId,
@@ -156,6 +197,53 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
     } catch (e) {
       _showSnackBar("Erreur: $e", const Color(0xFFEF4444));
     }
+  }
+
+  Widget _buildCycleSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: _cycles.map((cycle) {
+          final isSelected = _selectedCycle == cycle['id'];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedCycle = cycle['id'];
+                  _filterStudentsByCycle();
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isSelected ? cycle['color'] : Colors.transparent,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(cycle['icon'], color: isSelected ? Colors.white : cycle['color'], size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      cycle['name'],
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : cycle['color'],
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   @override
@@ -210,9 +298,16 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
+                            // Sélecteur de cycle
+                            _buildCycleSelector(),
+                            const SizedBox(height: 12),
                             DropdownButtonFormField<Map<String, dynamic>>(
                               value: selectedStudent,
-                              hint: const Text("Choisir un étudiant *"),
+                              hint: filteredStudents.isEmpty 
+                                  ? Text(_selectedCycle == 'all' 
+                                      ? "Aucun étudiant disponible" 
+                                      : "Aucun étudiant en $_selectedCycle")
+                                  : const Text("Choisir un étudiant *"),
                               isExpanded: true,
                               decoration: InputDecoration(
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -220,10 +315,40 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
                                 filled: true,
                                 fillColor: Colors.white,
                               ),
-                              items: students.map((student) {
+                              items: filteredStudents.map((student) {
+                                final isSecondary = student['classCycleType'] == 'secondaire';
                                 return DropdownMenuItem(
                                   value: student,
-                                  child: Text(student['fullName']),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        student['fullName'],
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            isSecondary ? Icons.school : Icons.abc,
+                                            size: 12,
+                                            color: isSecondary ? Colors.purple : Colors.green,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            student['className'],
+                                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                          ),
+                                          if (isSecondary && student['sectionName'] != null && student['sectionName'].isNotEmpty) ...[
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              ' - ${student['sectionName']}',
+                                              style: TextStyle(fontSize: 11, color: Colors.purple[600]),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 );
                               }).toList(),
                               onChanged: (value) {
@@ -240,11 +365,13 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
                               },
                               validator: (value) => value == null ? "Étudiant requis" : null,
                             ),
-                            if (students.isEmpty)
+                            if (filteredStudents.isEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
-                                  "Aucun étudiant disponible",
+                                  _selectedCycle == 'all' 
+                                      ? "Aucun étudiant disponible"
+                                      : "Aucun étudiant en $_selectedCycle",
                                   style: TextStyle(color: Colors.grey[600], fontSize: 12),
                                 ),
                               ),
@@ -287,12 +414,23 @@ class _AddDocumentScreenState extends State<AddDocumentScreen> {
                                 fillColor: Colors.white,
                               ),
                               items: classes.map((classItem) {
+                                final isSecondary = classItem['cycleType'] == 'secondaire';
                                 return DropdownMenuItem(
                                   value: classItem,
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(classItem['className'], style: const TextStyle(fontWeight: FontWeight.w500)),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            isSecondary ? Icons.school : Icons.abc,
+                                            size: 12,
+                                            color: isSecondary ? Colors.purple : Colors.green,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(classItem['className'], style: const TextStyle(fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
                                       Text('${classItem['level']} • ${classItem['year']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                     ],
                                   ),

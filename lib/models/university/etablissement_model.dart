@@ -43,6 +43,53 @@ class EtablissementModel {
   @HiveField(11)
   String schoolCode;  // Code unique de l'école
 
+  // ========== NOUVEAUX CHAMPS ==========
+  
+  @HiveField(12)
+  String? pays;
+  
+  @HiveField(13)
+  String? province;
+  
+  @HiveField(14)
+  String? ville;
+  
+  @HiveField(15)
+  String? commune;
+  
+  @HiveField(16)
+  String? codePostal;
+  
+  @HiveField(17)
+  String? statut;  // Public, Privé, Conventionné, etc.
+  
+  @HiveField(18)
+  String? directeurNom;
+  
+  @HiveField(19)
+  String? directeurEmail;
+  
+  @HiveField(20)
+  String? directeurTelephone;
+  
+  @HiveField(21)
+  int? anneeCreation;
+  
+  @HiveField(22)
+  int? capacite;  // Nombre d'élèves maximum
+  
+  @HiveField(23)
+  String? langueEnseignement;
+  
+  @HiveField(24)
+  String? logoUrl;  // URL du logo dans Firebase Storage
+  
+  @HiveField(25)
+  String? signaturePrefet;  // Nom du préfet des études
+  
+  @HiveField(26)
+  String? signatureChef;  // Nom du chef d'établissement
+
   EtablissementModel({
     this.id,
     required this.nom,
@@ -56,6 +103,22 @@ class EtablissementModel {
     this.updatedAt,
     this.isActive = true,
     required this.schoolCode,
+    // Nouveaux champs
+    this.pays,
+    this.province,
+    this.ville,
+    this.commune,
+    this.codePostal,
+    this.statut,
+    this.directeurNom,
+    this.directeurEmail,
+    this.directeurTelephone,
+    this.anneeCreation,
+    this.capacite,
+    this.langueEnseignement,
+    this.logoUrl,
+    this.signaturePrefet,
+    this.signatureChef,
   });
 
   // Générer un code unique pour l'école
@@ -90,6 +153,22 @@ class EtablissementModel {
       'updatedAt': updatedAt?.toIso8601String(),
       'isActive': isActive,
       'schoolCode': schoolCode,
+      // Nouveaux champs
+      'pays': pays,
+      'province': province,
+      'ville': ville,
+      'commune': commune,
+      'codePostal': codePostal,
+      'statut': statut,
+      'directeurNom': directeurNom,
+      'directeurEmail': directeurEmail,
+      'directeurTelephone': directeurTelephone,
+      'anneeCreation': anneeCreation,
+      'capacite': capacite,
+      'langueEnseignement': langueEnseignement,
+      'logoUrl': logoUrl,
+      'signaturePrefet': signaturePrefet,
+      'signatureChef': signatureChef,
     };
   }
 
@@ -112,6 +191,22 @@ class EtablissementModel {
           : null,
       isActive: map['isActive'] ?? true,
       schoolCode: map['schoolCode'] ?? '',
+      // Nouveaux champs
+      pays: map['pays'],
+      province: map['province'],
+      ville: map['ville'],
+      commune: map['commune'],
+      codePostal: map['codePostal'],
+      statut: map['statut'],
+      directeurNom: map['directeurNom'],
+      directeurEmail: map['directeurEmail'],
+      directeurTelephone: map['directeurTelephone'],
+      anneeCreation: map['anneeCreation'],
+      capacite: map['capacite'],
+      langueEnseignement: map['langueEnseignement'],
+      logoUrl: map['logoUrl'],
+      signaturePrefet: map['signaturePrefet'],
+      signatureChef: map['signatureChef'],
     );
   }
 
@@ -129,6 +224,22 @@ class EtablissementModel {
     DateTime? updatedAt,
     bool? isActive,
     String? schoolCode,
+    // Nouveaux champs
+    String? pays,
+    String? province,
+    String? ville,
+    String? commune,
+    String? codePostal,
+    String? statut,
+    String? directeurNom,
+    String? directeurEmail,
+    String? directeurTelephone,
+    int? anneeCreation,
+    int? capacite,
+    String? langueEnseignement,
+    String? logoUrl,
+    String? signaturePrefet,
+    String? signatureChef,
   }) {
     return EtablissementModel(
       id: id ?? this.id,
@@ -143,6 +254,22 @@ class EtablissementModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isActive: isActive ?? this.isActive,
       schoolCode: schoolCode ?? this.schoolCode,
+      // Nouveaux champs
+      pays: pays ?? this.pays,
+      province: province ?? this.province,
+      ville: ville ?? this.ville,
+      commune: commune ?? this.commune,
+      codePostal: codePostal ?? this.codePostal,
+      statut: statut ?? this.statut,
+      directeurNom: directeurNom ?? this.directeurNom,
+      directeurEmail: directeurEmail ?? this.directeurEmail,
+      directeurTelephone: directeurTelephone ?? this.directeurTelephone,
+      anneeCreation: anneeCreation ?? this.anneeCreation,
+      capacite: capacite ?? this.capacite,
+      langueEnseignement: langueEnseignement ?? this.langueEnseignement,
+      logoUrl: logoUrl ?? this.logoUrl,
+      signaturePrefet: signaturePrefet ?? this.signaturePrefet,
+      signatureChef: signatureChef ?? this.signatureChef,
     );
   }
 
@@ -154,4 +281,25 @@ class EtablissementModel {
 
   // Getter pour la couleur du statut
   int get statusColor => isActive ? 0xFF10B981 : 0xFFEF4444;
+  
+  // Getter pour l'adresse complète formatée
+  String get adresseComplete {
+    List<String> parts = [];
+    if (adresse != null && adresse!.isNotEmpty) parts.add(adresse!);
+    if (ville != null && ville!.isNotEmpty) parts.add(ville!);
+    if (commune != null && commune!.isNotEmpty) parts.add(commune!);
+    if (province != null && province!.isNotEmpty) parts.add(province!);
+    if (codePostal != null && codePostal!.isNotEmpty) parts.add(codePostal!);
+    if (pays != null && pays!.isNotEmpty) parts.add(pays!);
+    return parts.join(', ');
+  }
+  
+  // Getter pour le pays affiché
+  String get paysDisplay => pays ?? 'Non spécifié';
+  
+  // Getter pour la province affichée
+  String get provinceDisplay => province ?? 'Non spécifié';
+  
+  // Getter pour la ville affichée
+  String get villeDisplay => ville ?? 'Non spécifié';
 }
