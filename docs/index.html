@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Ecole App - Téléchargement</title>
+    <style>
+        /* ===== RESET ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a237e, #0d47a1);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 50px 40px;
+            max-width: 550px;
+            width: 100%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            animation: fadeIn 0.6s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo {
+            font-size: 72px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            color: #1a237e;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 16px;
+            border-radius: 30px;
+            margin-bottom: 28px;
+        }
+
+        .download-section {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 30px;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 24px;
+            border-radius: 16px;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 700;
+            color: #fff;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .download-btn:hover {
+            transform: scale(1.03);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+        }
+
+        .download-btn.windows {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+        }
+
+        .download-btn.android {
+            background: linear-gradient(135deg, #065f46, #10b981);
+        }
+
+        .download-btn .icon {
+            font-size: 28px;
+        }
+
+        .download-btn .info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 1.2;
+        }
+
+        .download-btn .info .label {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .download-btn .info .sub {
+            font-size: 12px;
+            font-weight: 400;
+            opacity: 0.85;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #999;
+        }
+
+        .footer a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .separator {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 6px 0 10px;
+            color: #ccc;
+            font-size: 13px;
+        }
+
+        .separator::before,
+        .separator::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            .logo { font-size: 56px; }
+            h1 { font-size: 22px; }
+
+            .download-btn {
+                font-size: 15px;
+                padding: 14px 18px;
+            }
+
+            .download-btn .icon { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Logo -->
+    <div class="logo">📚</div>
+
+    <!-- Titre -->
+    <h1>Ecole App</h1>
+    <p class="subtitle">Application de gestion scolaire</p>
+
+    <!-- Version -->
+    <div class="version-badge">📦 Version 1.0.0</div>
+
+    <!-- Boutons de téléchargement -->
+    <div class="download-section">
+
+        <!-- Windows -->
+        <a href="https://github.com/escathadeveloppeur/escaschool/releases/latest/download/ecole_app.exe"
+           class="download-btn windows"
+           download>
+            <span class="icon">🖥️</span>
+            <span class="info">
+                <span class="label">Télécharger pour Windows</span>
+                <span class="sub">.exe • 25 Mo</span>
+            </span>
+        </a>
+
+        <!-- Android -->
+        <a href="https://github.com/escathadeveloppeur/escaschool/releases/latest/download/app-release.apk"
+           class="download-btn android"
+           download>
+            <span class="icon">📱</span>
+            <span class="info">
+                <span class="label">Télécharger pour Android</span>
+                <span class="sub">.apk • ~30 Mo</span>
+            </span>
+        </a>
+    </div>
+
+    <!-- Séparateur -->
+    <div class="separator">🔐 Sécurisé • Gratuit</div>
+
+    <!-- Footer -->
+    <div class="footer">
+        Dernière mise à jour : <strong>Juin 2026</strong><br>
+        <a href="https://github.com/escathadeveloppeur/escaschool" target="_blank">Voir le code source</a>
+    </div>
+</div>
+
+</body>
+</html>
