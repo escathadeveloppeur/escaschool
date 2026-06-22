@@ -12,14 +12,25 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Setup Visual Studio
+      uses: microsoft/setup-msbuild@v2
+    
     - uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.0'
+        flutter-version: '3.22.0'
         channel: 'stable'
     
-    - run: flutter pub get
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
     
-    - run: flutter build windows --release
+    - name: Clean project
+      run: flutter clean
+    
+    - name: Get dependencies
+      run: flutter pub get
+    
+    - name: Build Windows app
+      run: flutter build windows --release
     
     - name: Upload Windows build
       uses: actions/upload-artifact@v4
