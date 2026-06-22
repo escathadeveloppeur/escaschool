@@ -37,7 +37,7 @@ dependencies:
   printing: ^5.14.2
   file_picker: ^8.3.2
   syncfusion_flutter_pdf: ^23.1.42
-  share_plus: ^10.1.4      # Pour partager le reçu
+  share_plus: ^9.0.0      # Pour partager le reçu
   
   # Calendrier & Scanner
   table_calendar: ^3.0.9
