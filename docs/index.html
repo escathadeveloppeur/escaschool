@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Ecole App - Téléchargement</title>
+    <meta name="description" content="Téléchargez Ecole App, l'application de gestion scolaire pour Windows et Android. Gérez les élèves, enseignants, paiements, bulletins et présences." />
+    <title>EscaSchool - Téléchargement</title>
     <style>
-        /* ===== RESET ===== */
+        /* ===== RESET & BASE ===== */
         * {
             margin: 0;
             padding: 0;
@@ -13,215 +14,414 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a237e, #0d47a1);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             min-height: 100vh;
+            background: linear-gradient(145deg, #f0f4ff 0%, #e8edf5 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
         }
 
-        .container {
+        /* ===== CARTE PRINCIPALE ===== */
+        .card {
             background: #ffffff;
-            border-radius: 24px;
-            padding: 50px 40px;
-            max-width: 550px;
+            border-radius: 32px;
+            padding: 50px 45px;
+            max-width: 620px;
             width: 100%;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
-            text-align: center;
-            animation: fadeIn 0.6s ease-in-out;
+            box-shadow: 0 30px 80px rgba(26, 35, 126, 0.15);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #1e3a8a, #3b82f6, #10b981);
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
         }
 
         .logo {
-            font-size: 72px;
-            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        h1 {
+        .logo-icon {
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 28px;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+        }
+
+        .logo-text h1 {
+            font-size: 24px;
             font-weight: 800;
             color: #1a237e;
-            margin-bottom: 6px;
+            letter-spacing: -0.5px;
         }
 
-        .subtitle {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 30px;
+        .logo-text .tagline {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 500;
         }
 
-        .version-badge {
-            display: inline-block;
+        .badge-version {
             background: #e8f5e9;
             color: #2e7d32;
-            font-size: 13px;
-            font-weight: 600;
-            padding: 4px 16px;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 14px;
             border-radius: 30px;
+            border: 1px solid rgba(46, 125, 50, 0.15);
+            white-space: nowrap;
+        }
+
+        /* ===== SEPARATEUR ===== */
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #e0e7ff, transparent);
+            margin: 18px 0 24px;
+        }
+
+        /* ===== DESCRIPTION ===== */
+        .description {
+            text-align: center;
             margin-bottom: 28px;
         }
 
-        .download-section {
+        .description p {
+            font-size: 15px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .description strong {
+            color: #1a237e;
+        }
+
+        /* ===== BOUTONS ===== */
+        .download-grid {
             display: flex;
             flex-direction: column;
             gap: 14px;
-            margin-bottom: 30px;
+            margin-bottom: 28px;
         }
 
         .download-btn {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 16px 24px;
-            border-radius: 16px;
+            gap: 18px;
+            padding: 18px 24px;
+            border-radius: 18px;
             text-decoration: none;
-            font-size: 17px;
-            font-weight: 700;
             color: #fff;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
             border: none;
             cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            pointer-events: none;
         }
 
         .download-btn:hover {
-            transform: scale(1.03);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
         }
 
+        .download-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* Windows */
         .download-btn.windows {
             background: linear-gradient(135deg, #1e3a8a, #3b82f6);
         }
 
+        .download-btn.windows:hover {
+            box-shadow: 0 12px 35px rgba(59, 130, 246, 0.35);
+        }
+
+        /* Android */
         .download-btn.android {
             background: linear-gradient(135deg, #065f46, #10b981);
         }
 
+        .download-btn.android:hover {
+            box-shadow: 0 12px 35px rgba(16, 185, 129, 0.35);
+        }
+
         .download-btn .icon {
-            font-size: 28px;
+            font-size: 32px;
+            flex-shrink: 0;
         }
 
         .download-btn .info {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            line-height: 1.2;
+            flex: 1;
         }
 
         .download-btn .info .label {
-            font-size: 15px;
-            font-weight: 600;
+            font-size: 17px;
+            font-weight: 700;
+            display: block;
         }
 
         .download-btn .info .sub {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 400;
             opacity: 0.85;
+            display: block;
+            margin-top: 2px;
         }
 
-        .footer {
-            margin-top: 20px;
-            font-size: 13px;
-            color: #999;
+        .download-btn .arrow {
+            font-size: 22px;
+            opacity: 0.7;
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
         }
 
-        .footer a {
+        .download-btn:hover .arrow {
+            transform: translateX(4px);
+            opacity: 1;
+        }
+
+        /* ===== STATS ===== */
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin: 24px 0 22px;
+            padding: 16px 0;
+            border-top: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-item .number {
+            font-size: 20px;
+            font-weight: 800;
             color: #1a237e;
-            text-decoration: none;
         }
 
-        .footer a:hover {
-            text-decoration: underline;
+        .stat-item .label {
+            font-size: 12px;
+            color: #9ca3af;
+            font-weight: 500;
+            display: block;
+            margin-top: 2px;
         }
 
-        .separator {
+        /* ===== FOOTER ===== */
+        .footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .footer .security {
             display: flex;
             align-items: center;
-            gap: 16px;
-            margin: 6px 0 10px;
-            color: #ccc;
-            font-size: 13px;
+            gap: 6px;
+            font-size: 12px;
+            color: #6b7280;
         }
 
-        .separator::before,
-        .separator::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #e0e0e0;
+        .footer .security span {
+            font-size: 16px;
         }
 
-        /* Responsive */
-        @media (max-width: 480px) {
-            .container {
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 550px) {
+            .card {
                 padding: 30px 20px;
+                border-radius: 24px;
             }
 
-            .logo { font-size: 56px; }
-            h1 { font-size: 22px; }
+            .header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .logo-text h1 {
+                font-size: 20px;
+            }
+
+            .badge-version {
+                font-size: 10px;
+                padding: 4px 12px;
+            }
 
             .download-btn {
-                font-size: 15px;
                 padding: 14px 18px;
+                gap: 14px;
             }
 
-            .download-btn .icon { font-size: 24px; }
+            .download-btn .icon {
+                font-size: 26px;
+            }
+
+            .download-btn .info .label {
+                font-size: 15px;
+            }
+
+            .stats {
+                gap: 16px;
+                flex-wrap: wrap;
+            }
+
+            .stat-item .number {
+                font-size: 17px;
+            }
+
+            .footer {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .card {
+                padding: 20px 14px;
+            }
+
+            .download-btn {
+                flex-wrap: wrap;
+                justify-content: center;
+                text-align: center;
+            }
+
+            .download-btn .arrow {
+                display: none;
+            }
+        }
+
+        /* ===== ANIMATION ===== */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            animation: fadeInUp 0.6s ease-out;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <!-- Logo -->
-    <div class="logo">📚</div>
+<div class="card">
 
-    <!-- Titre -->
-    <h1>Ecole App</h1>
-    <p class="subtitle">Application de gestion scolaire</p>
+    <!-- HEADER -->
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">📚</div>
+            <div class="logo-text">
+                <h1>Ecole App</h1>
+                <span class="tagline">Gestion scolaire simplifiée</span>
+            </div>
+        </div>
+        <span class="badge-version">v1.0.0</span>
+    </div>
 
-    <!-- Version -->
-    <div class="version-badge">📦 Version 1.0.0</div>
+    <div class="divider"></div>
 
-    <!-- Boutons de téléchargement -->
-    <div class="download-section">
+    <!-- DESCRIPTION -->
+    <div class="description">
+        <p>
+            <strong>Ecole App</strong> est une solution complète de gestion scolaire.
+            Téléchargez la version adaptée à votre appareil et gérez vos établissements
+            en toute simplicité.
+        </p>
+    </div>
+
+    <!-- BOUTONS DE TÉLÉCHARGEMENT -->
+    <div class="download-grid">
 
         <!-- Windows -->
-        <a href="https://github.com/escathadeveloppeur/escaschool/releases/latest/download/ecole_app.exe"
+        <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/ecole_app.exe"
            class="download-btn windows"
            download>
             <span class="icon">🖥️</span>
             <span class="info">
-                <span class="label">Télécharger pour Windows</span>
-                <span class="sub">.exe • 25 Mo</span>
+                <span class="label">Windows</span>
+                <span class="sub">.exe • 84 MB • Compatible Windows 10 / 11</span>
             </span>
+            <span class="arrow">→</span>
         </a>
 
         <!-- Android -->
-        <a href="https://github.com/escathadeveloppeur/escaschool/releases/latest/download/app-release.apk"
+        <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/app-release.apk"
            class="download-btn android"
            download>
             <span class="icon">📱</span>
             <span class="info">
-                <span class="label">Télécharger pour Android</span>
-                <span class="sub">.apk • ~30 Mo</span>
+                <span class="label">Android</span>
+                <span class="sub">.apk • 13 MB • Android 5.0 et plus</span>
             </span>
+            <span class="arrow">→</span>
         </a>
     </div>
 
-    <!-- Séparateur -->
-    <div class="separator">🔐 Sécurisé • Gratuit</div>
-
-    <!-- Footer -->
-    <div class="footer">
-        Dernière mise à jour : <strong>Juin 2026</strong><br>
-        <a href="https://github.com/escathadeveloppeur/escaschool" target="_blank">Voir le code source</a>
+    <!-- STATISTIQUES -->
+    <div class="stats">
+        <div class="stat-item">
+            <span class="number">2</span>
+            <span class="label">Plateformes</span>
+        </div>
+        <div class="stat-item">
+            <span class="number">100+</span>
+            <span class="label">Établissements</span>
+        </div>
+        <div class="stat-item">
+            <span class="number">24/7</span>
+            <span class="label">Disponible</span>
+        </div>
+        <div class="stat-item">
+            <span class="number">✅</span>
+            <span class="label">Sécurisé</span>
+        </div>
     </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <div class="security">
+            <span>🔒</span> Téléchargement sécurisé
+        </div>
+    </div>
+
 </div>
 
 </body>
