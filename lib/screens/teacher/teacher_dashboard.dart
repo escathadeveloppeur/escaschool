@@ -15,6 +15,7 @@ import 'manage_exams_screen.dart';
 import 'create_course_screen.dart';
 import 'manage_courses_screen.dart';
 import 'teacher_messages_screen.dart';
+import 'teacher_announcements.dart'; // ✅ NOUVEAU : Page des annonces
 
 // ===================== PALETTE / THEME HELPERS =====================
 class _AppColors {
@@ -67,6 +68,17 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
   
   late AnimationController _animationController;
   
+  // ✅ Liste des pages avec Annonces
+  final List<String> titles = [
+    "Tableau de Bord",
+    "Présences",
+    "Notes & Évaluations",
+    "Mes Élèves",
+    "Emploi du Temps",
+    "Rapports & Bulletins",
+    "Annonces", // ✅ NOUVEAU
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -393,15 +405,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
       return time;
     }
   }
-  
-  final List<String> titles = [
-    "Tableau de Bord",
-    "Présences",
-    "Notes & Évaluations",
-    "Mes Élèves",
-    "Emploi du Temps",
-    "Rapports & Bulletins",
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -436,6 +439,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
         homeroomClassId: _homeroomClassId,
         homeroomClassName: _homeroomClassName,
       ),
+      const TeacherAnnouncementsScreen(), // ✅ NOUVEAU : Page des annonces
     ];
 
     final primaryColor = _isHomeroomTeacher ? _AppColors.purple : _AppColors.success;
@@ -637,6 +641,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
           _drawerItem(Icons.school_rounded, "Mes Élèves", 3, primaryColor),
           _drawerItem(Icons.calendar_today_rounded, "Emploi du temps", 4, primaryColor),
           _drawerItem(Icons.description_rounded, "Rapports", 5, primaryColor),
+          _drawerItem(Icons.campaign_rounded, "Annonces", 6, primaryColor), // ✅ NOUVEAU
           const Divider(height: 24, thickness: 1),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -739,6 +744,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
         selected: isSelected,
         selectedTileColor: primaryColor.withOpacity(0.08),
         onTap: () {
+          // Fermer le drawer d'abord
+          Navigator.pop(context);
+          
+          // Puis naviguer ou changer d'index
           if (index == -2) {
             Navigator.push(context, MaterialPageRoute(builder: (context) => CreateExamScreen(
               professorFirestoreId: widget.professorFirestoreId,
@@ -757,12 +766,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
           } else if (index >= 0) {
             setState(() => selectedIndex = index);
           }
-          Navigator.pop(context);
         },
       ),
     );
   }
-  
+
   Widget _dashboardHome() {
     final upcomingSchedules = _getUpcomingSchedules();
     final primaryColor = _isHomeroomTeacher ? _AppColors.purple : _AppColors.success;
@@ -1016,6 +1024,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> with SingleTickerPr
             title: "Rapports & Bulletins",
             subtitle: "Générer les rapports",
             onTap: () => setState(() => selectedIndex = 5),
+          ),
+          const SizedBox(height: 12),
+
+          // ✅ NOUVEAU : Accès rapide aux annonces
+          _quickAccessCard(
+            icon: Icons.campaign_rounded,
+            iconColor: primaryColor,
+            title: "Annonces",
+            subtitle: "Consulter les annonces de l'école",
+            onTap: () => setState(() => selectedIndex = 6),
           ),
         ],
       ),

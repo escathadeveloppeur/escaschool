@@ -40,6 +40,70 @@ class _ParentAttendanceScreenState extends State<ParentAttendanceScreen>
     super.dispose();
   }
 
+  /// ✅ Fonction pour extraire la date de manière sécurisée
+  DateTime _extractDate(dynamic dateField) {
+    if (dateField == null) return DateTime.now();
+    
+    if (dateField is Timestamp) {
+      return dateField.toDate();
+    }
+    
+    if (dateField is String) {
+      try {
+        return DateTime.parse(dateField);
+      } catch (e) {
+        print('⚠️ Erreur parse date: $e');
+        return DateTime.now();
+      }
+    }
+    
+    if (dateField is DateTime) {
+      return dateField;
+    }
+    
+    return DateTime.now();
+  }
+
+  /// ✅ Formater une date sans utiliser le locale 'fr_FR'
+  String _formatDate(DateTime date) {
+    try {
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year;
+      return '$day/$month/$year';
+    } catch (e) {
+      return 'Date inconnue';
+    }
+  }
+
+  /// ✅ Formater la date avec le jour de la semaine en français
+  String _formatDateLong(DateTime date) {
+    const weekdays = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    try {
+      final weekday = weekdays[date.weekday - 1];
+      final day = date.day.toString().padLeft(2, '0');
+      final month = months[date.month - 1];
+      final year = date.year;
+      return '$weekday $day $month $year';
+    } catch (e) {
+      return _formatDate(date);
+    }
+  }
+
+  /// ✅ Formater le mois sans utiliser le locale 'fr_FR'
+  String _formatMonth(DateTime date) {
+    const months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
+
   /// 🔥 Charger les enfants et leurs présences depuis Firestore
   Future<void> _loadChildrenAndAttendances() async {
     setState(() => _isLoading = true);
@@ -121,7 +185,7 @@ class _ParentAttendanceScreenState extends State<ParentAttendanceScreen>
         'id': doc.id,
         'studentName': data['studentName'] ?? '',
         'status': data['status'] ?? 'absent',
-        'date': (data['date'] as Timestamp).toDate(),
+        'date': _extractDate(data['date']),
         'subject': data['subject'] ?? '',
         'reason': data['reason'] ?? '',
       };
@@ -135,7 +199,8 @@ class _ParentAttendanceScreenState extends State<ParentAttendanceScreen>
 
     for (var attendance in attendances) {
       final date = attendance['date'] as DateTime;
-      final monthKey = DateFormat('MMMM yyyy', 'fr_FR').format(date);
+      // ✅ Utiliser _formatMonth au lieu de DateFormat avec locale
+      final monthKey = _formatMonth(date);
       final status = attendance['status'] as String;
 
       stats.putIfAbsent(monthKey, () => {
@@ -319,21 +384,24 @@ class _ParentAttendanceScreenState extends State<ParentAttendanceScreen>
                                             ),
                                           ),
                                           ...attendances
-                                              .where((a) => DateFormat('MMMM yyyy', 'fr_FR').format(a['date'] as DateTime) == month)
-                                              .map((a) => Container(
-                                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                                    decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
-                                                    child: ListTile(
-                                                      leading: Container(
-                                                        width: 40, height: 40,
-                                                        decoration: BoxDecoration(color: _getStatusColor(a['status']).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                                        child: Center(child: Icon(a['status'] == 'present' ? Icons.check_circle : a['status'] == 'absent' ? Icons.cancel : a['status'] == 'late' ? Icons.access_time : Icons.assignment_turned_in, color: _getStatusColor(a['status']), size: 20)),
-                                                      ),
-                                                      title: Text(DateFormat('EEEE dd MMMM yyyy', 'fr_FR').format(a['date'] as DateTime), style: const TextStyle(fontWeight: FontWeight.w500)),
-                                                      subtitle: Text(a['subject']),
-                                                      trailing: Chip(label: Text(_getStatusText(a['status'])), backgroundColor: _getStatusColor(a['status']).withOpacity(0.1), labelStyle: TextStyle(color: _getStatusColor(a['status']))),
+                                              .where((a) => _formatMonth(a['date'] as DateTime) == month)
+                                              .map((a) {
+                                                final date = a['date'] as DateTime;
+                                                return Container(
+                                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                                  decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
+                                                  child: ListTile(
+                                                    leading: Container(
+                                                      width: 40, height: 40,
+                                                      decoration: BoxDecoration(color: _getStatusColor(a['status']).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                                                      child: Center(child: Icon(a['status'] == 'present' ? Icons.check_circle : a['status'] == 'absent' ? Icons.cancel : a['status'] == 'late' ? Icons.access_time : Icons.assignment_turned_in, color: _getStatusColor(a['status']), size: 20)),
                                                     ),
-                                                  )),
+                                                    title: Text(_formatDateLong(date), style: const TextStyle(fontWeight: FontWeight.w500)),
+                                                    subtitle: Text(a['subject']),
+                                                    trailing: Chip(label: Text(_getStatusText(a['status'])), backgroundColor: _getStatusColor(a['status']).withOpacity(0.1), labelStyle: TextStyle(color: _getStatusColor(a['status']))),
+                                                  ),
+                                                );
+                                              }),
                                         ],
                                       ),
                                     ),

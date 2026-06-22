@@ -1,4 +1,5 @@
 // lib/services/announcement_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'db_helper.dart';
@@ -8,21 +9,40 @@ class AnnouncementService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final DBHelper _dbHelper = DBHelper();
 
-  /// Créer une annonce dans Firestore
+  /// ✅ Créer une annonce dans Firestore
   Future<String> createAnnouncement(Map<String, dynamic> announcement, String schoolId) async {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
 
       final docRef = _firestore.collection('announcements').doc();
+      
+      final audience = announcement['audience'] ?? 'all';
+      final targetedRoles = announcement['targetedRoles'] ?? _getTargetedRoles(audience);
+      final classId = announcement['classId'];
+      final className = announcement['className'];
+      final audienceLabel = announcement['audienceLabel'] ?? _getAudienceLabel(audience);
+      
       final announcementData = {
         'title': announcement['title'],
         'content': announcement['content'],
-        'date': announcement['date'],
+        'date': announcement['date'] ?? FieldValue.serverTimestamp(),
         'schoolId': schoolId,
         'localId': announcement['id'],
         'createdBy': user.uid,
+        'createdByName': announcement['createdByName'] ?? user.displayName ?? 'Admin',
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'audience': audience,
+        'targetedRoles': targetedRoles,
+        'classId': classId,
+        'className': className,
+        'audienceLabel': audienceLabel,
+        'audienceDescription': _getAudienceDescription(audience),
+        'isPinned': announcement['isPinned'] ?? false,
+        'status': announcement['status'] ?? 'active',
+        'expiresAt': announcement['expiresAt'],
+        'viewCount': 0,
       };
 
       await docRef.set(announcementData);
@@ -35,28 +55,434 @@ class AnnouncementService {
     }
   }
 
-  /// Synchroniser toutes les annonces locales vers Firestore
+  /// ✅ Mettre à jour une annonce dans Firestore
+  Future<void> updateAnnouncement(String announcementId, Map<String, dynamic> announcement) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('Utilisateur non connecté');
+
+      final audience = announcement['audience'] ?? 'all';
+      final targetedRoles = announcement['targetedRoles'] ?? _getTargetedRoles(audience);
+      
+      final updateData = {
+        'title': announcement['title'],
+        'content': announcement['content'],
+        'audience': audience,
+        'targetedRoles': targetedRoles,
+        'classId': announcement['classId'],
+        'className': announcement['className'],
+        'audienceLabel': _getAudienceLabel(audience),
+        'audienceDescription': _getAudienceDescription(audience),
+        'isPinned': announcement['isPinned'] ?? false,
+        'status': announcement['status'] ?? 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': user.uid,
+      };
+
+      await _firestore
+          .collection('announcements')
+          .doc(announcementId)
+          .update(updateData);
+          
+      print('✅ Annonce mise à jour dans Firestore: $announcementId');
+
+    } catch (e) {
+      print('❌ Erreur mise à jour annonce Firestore: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Supprimer une annonce de Firestore
+  Future<void> deleteAnnouncement(String announcementId) async {
+    try {
+      await _firestore
+          .collection('announcements')
+          .doc(announcementId)
+          .delete();
+          
+      print('🗑️ Annonce supprimée de Firestore: $announcementId');
+
+    } catch (e) {
+      print('❌ Erreur suppression annonce Firestore: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Épingler/Désépingler une annonce
+  Future<void> togglePinAnnouncement(String announcementId, bool isPinned) async {
+    try {
+      await _firestore
+          .collection('announcements')
+          .doc(announcementId)
+          .update({
+        'isPinned': isPinned,
+        'pinnedAt': isPinned ? FieldValue.serverTimestamp() : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+          
+      print('📌 Annonce ${isPinned ? 'épinglée' : 'désépinglée'}: $announcementId');
+
+    } catch (e) {
+      print('❌ Erreur épinglage annonce Firestore: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Incrémenter le compteur de vues
+  Future<void> incrementViewCount(String announcementId) async {
+    try {
+      await _firestore
+          .collection('announcements')
+          .doc(announcementId)
+          .update({
+        'viewCount': FieldValue.increment(1),
+      });
+
+    } catch (e) {
+      print('❌ Erreur incrément vues: $e');
+    }
+  }
+
+  /// ✅ Récupérer les annonces pour un utilisateur
+  Future<List<Map<String, dynamic>>> getAnnouncementsForUser(
+    String schoolId, 
+    String userId, 
+    String userRole, {
+    String? classId,
+  }) async {
+    try {
+      Query query = _firestore
+          .collection('announcements')
+          .where('schoolId', isEqualTo: schoolId)
+          .where('status', isEqualTo: 'active')
+          .orderBy('isPinned', descending: true)
+          .orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+      
+      final List<Map<String, dynamic>> visibleAnnouncements = [];
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final audience = data['audience'] ?? 'all';
+        final targetedRoles = List<String>.from(data['targetedRoles'] ?? []);
+        final announcementClassId = data['classId'];
+        
+        // Vérifier si l'utilisateur peut voir cette annonce
+        bool canSee = false;
+        
+        if (userRole == 'admin' || userRole == 'super_admin') {
+          canSee = true;
+        } else {
+          switch (audience) {
+            case 'all':
+              canSee = true;
+              break;
+            case 'students':
+              canSee = userRole == 'student';
+              if (canSee && classId != null && announcementClassId != null) {
+                canSee = classId == announcementClassId;
+              }
+              break;
+            case 'teachers':
+              canSee = userRole == 'teacher';
+              break;
+            case 'parents':
+              canSee = userRole == 'parent';
+              break;
+            case 'staff':
+              canSee = userRole == 'staff' || userRole == 'admin';
+              break;
+            case 'admins':
+              canSee = userRole == 'admin' || userRole == 'super_admin';
+              break;
+            case 'specific_class':
+              canSee = userRole == 'student' && classId == announcementClassId;
+              break;
+            default:
+              canSee = false;
+          }
+        }
+        
+        if (canSee) {
+          final announcement = {
+            'id': doc.id,
+            'firestoreId': doc.id,
+            ...data,
+          };
+          visibleAnnouncements.add(announcement);
+        }
+      }
+      
+      return visibleAnnouncements;
+
+    } catch (e) {
+      print('❌ Erreur récupération annonces: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Récupérer les annonces épinglées
+  Future<List<Map<String, dynamic>>> getPinnedAnnouncements(String schoolId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('announcements')
+          .where('schoolId', isEqualTo: schoolId)
+          .where('isPinned', isEqualTo: true)
+          .where('status', isEqualTo: 'active')
+          .orderBy('pinnedAt', descending: true)
+          .limit(3)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'firestoreId': doc.id,
+          ...data,
+        };
+      }).toList();
+
+    } catch (e) {
+      print('❌ Erreur récupération annonces épinglées: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Synchroniser toutes les annonces locales vers Firestore
   Future<void> syncAllAnnouncementsToFirestore(String schoolId) async {
     try {
       print('🔄 Synchronisation des annonces vers Firestore...');
       final announcements = await _dbHelper.getAllAnnouncements();
       
+      if (announcements.isEmpty) {
+        print('📭 Aucune annonce à synchroniser');
+        return;
+      }
+      
+      int syncedCount = 0;
+      
       for (var announcement in announcements) {
-        final existing = await _firestore
-            .collection('announcements')
-            .where('localId', isEqualTo: announcement['id'])
-            .get();
+        try {
+          final existing = await _firestore
+              .collection('announcements')
+              .where('localId', isEqualTo: announcement['id'])
+              .get();
 
-        if (existing.docs.isEmpty) {
-          await createAnnouncement(announcement, schoolId);
+          if (existing.docs.isEmpty) {
+            await createAnnouncement(announcement, schoolId);
+            syncedCount++;
+          }
+        } catch (e) {
+          print('❌ Erreur synchronisation annonce ${announcement['id']}: $e');
         }
       }
 
-      print('✅ Synchronisation des annonces terminée: ${announcements.length}');
+      print('✅ Synchronisation terminée: $syncedCount/${announcements.length} annonces');
 
     } catch (e) {
       print('❌ Erreur synchronisation annonces: $e');
       throw e;
+    }
+  }
+
+  /// ✅ Récupérer les annonces depuis Firestore vers local
+  Future<void> syncAnnouncementsFromFirestore(String schoolId) async {
+    try {
+      print('📥 Synchronisation des annonces depuis Firestore...');
+      
+      final snapshot = await _firestore
+          .collection('announcements')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+
+      int addedCount = 0;
+      int updatedCount = 0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        final announcement = {
+          'id': data['localId'],
+          'firestoreId': doc.id,
+          'title': data['title'] ?? '',
+          'content': data['content'] ?? '',
+          'date': data['date'] != null 
+              ? (data['date'] as Timestamp).toDate().toIso8601String()
+              : DateTime.now().toIso8601String(),
+          'schoolId': data['schoolId'],
+          'audience': data['audience'] ?? 'all',
+          'targetedRoles': data['targetedRoles'] ?? [],
+          'classId': data['classId'],
+          'className': data['className'],
+          'isPinned': data['isPinned'] ?? false,
+          'createdByName': data['createdByName'] ?? 'Admin',
+        };
+        
+        final existing = await _dbHelper.getAnnouncementByLocalId(announcement['id']);
+        
+        if (existing == null) {
+          await _dbHelper.addAnnouncement(announcement);
+          addedCount++;
+        } else {
+          await _dbHelper.updateAnnouncementByLocalId(announcement['id'], announcement);
+          updatedCount++;
+        }
+      }
+
+      print('✅ Synchronisation terminée: +$addedCount ajoutées, $updatedCount mises à jour');
+
+    } catch (e) {
+      print('❌ Erreur synchronisation annonces depuis Firestore: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Supprimer les annonces expirées
+  Future<void> deleteExpiredAnnouncements() async {
+    try {
+      final now = Timestamp.now();
+      
+      final snapshot = await _firestore
+          .collection('announcements')
+          .where('expiresAt', isLessThan: now)
+          .get();
+
+      final batch = _firestore.batch();
+      
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      
+      await batch.commit();
+      
+      if (snapshot.docs.isNotEmpty) {
+        print('🗑️ ${snapshot.docs.length} annonces expirées supprimées');
+      }
+
+    } catch (e) {
+      print('❌ Erreur suppression annonces expirées: $e');
+    }
+  }
+
+  // ==================== MÉTHODES UTILITAIRES ====================
+
+  /// ✅ Obtenir les rôles ciblés en fonction de l'audience
+  List<String> _getTargetedRoles(String audience) {
+    switch (audience) {
+      case 'students':
+        return ['student'];
+      case 'teachers':
+        return ['teacher'];
+      case 'parents':
+        return ['parent'];
+      case 'staff':
+        return ['staff'];
+      case 'admins':
+        return ['admin', 'super_admin'];
+      case 'all':
+      default:
+        return ['student', 'teacher', 'parent', 'staff', 'admin', 'super_admin'];
+    }
+  }
+
+  /// ✅ Obtenir le libellé de l'audience
+  String _getAudienceLabel(String audience) {
+    final labels = {
+      'all': '📢 Tout le monde',
+      'students': '👨‍🎓 Étudiants',
+      'teachers': '👨‍🏫 Enseignants',
+      'parents': '👨‍👩‍👦 Parents',
+      'staff': '👔 Personnel',
+      'admins': '👨‍💼 Admins',
+      'specific_class': '🏫 Classe spécifique',
+    };
+    return labels[audience] ?? 'Tout le monde';
+  }
+
+  /// ✅ Obtenir la description de l'audience
+  String _getAudienceDescription(String audience) {
+    final descriptions = {
+      'all': 'Visible par tous les utilisateurs de l\'école',
+      'students': 'Visible uniquement par les étudiants',
+      'teachers': 'Visible uniquement par les enseignants',
+      'parents': 'Visible uniquement par les parents',
+      'staff': 'Visible uniquement par le personnel',
+      'admins': 'Visible uniquement par les administrateurs',
+      'specific_class': 'Visible uniquement par les étudiants d\'une classe spécifique',
+    };
+    return descriptions[audience] ?? 'Visible par tous';
+  }
+
+  // ==================== MÉTHODES STATISTIQUES ====================
+
+  /// ✅ Compter les annonces par école
+  Future<int> countAnnouncementsBySchool(String schoolId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('announcements')
+          .where('schoolId', isEqualTo: schoolId)
+          .count()
+          .get();
+          
+      // ✅ Correction: retourner snapshot.count directement (c'est un int)
+      return snapshot.count ?? 0;
+    } catch (e) {
+      print('❌ Erreur comptage annonces: $e');
+      return 0;
+    }
+  }
+
+  /// ✅ Compter les annonces par audience
+  Future<Map<String, int>> countAnnouncementsByAudience(String schoolId) async {
+    try {
+      final Map<String, int> counts = {};
+      final audiences = ['all', 'students', 'teachers', 'parents', 'staff', 'admins', 'specific_class'];
+      
+      for (var audience in audiences) {
+        final snapshot = await _firestore
+            .collection('announcements')
+            .where('schoolId', isEqualTo: schoolId)
+            .where('audience', isEqualTo: audience)
+            .count()
+            .get();
+        // ✅ Correction: utiliser snapshot.count au lieu de count
+        counts[audience] = snapshot.count ?? 0;
+      }
+      
+      return counts;
+    } catch (e) {
+      print('❌ Erreur comptage annonces par audience: $e');
+      return {};
+    }
+  }
+
+  /// ✅ Récupérer les annonces récentes (limitées)
+  Future<List<Map<String, dynamic>>> getRecentAnnouncements(
+    String schoolId, {
+    int limit = 5,
+  }) async {
+    try {
+      final snapshot = await _firestore
+          .collection('announcements')
+          .where('schoolId', isEqualTo: schoolId)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'firestoreId': doc.id,
+          ...data,
+        };
+      }).toList();
+
+    } catch (e) {
+      print('❌ Erreur récupération annonces récentes: $e');
+      return [];
     }
   }
 }

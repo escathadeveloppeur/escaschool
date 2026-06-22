@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/db_helper.dart';
 import '../../providers/auth_provider.dart';
+import 'receipt_screen.dart';  // ✅ Importer l'écran de reçu
 
 class AddPaymentScreen extends StatefulWidget {
   final Map<String, dynamic>? payment;
@@ -30,7 +31,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   
   bool isSemester = false;
   String selectedPeriod = '';
-  String _selectedCycle = 'all'; // 'all', 'primaire', 'secondaire'
+  String _selectedCycle = 'all';
   
   final List<String> months = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -72,14 +73,12 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
     }
   }
 
-  /// 🔥 Charger les étudiants et paiements depuis Firestore
   Future<void> _loadDataFromFirestore() async {
     setState(() => loading = true);
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final schoolId = auth.currentSchoolId;
       
-      // 1. Charger les étudiants depuis Firestore
       Query studentQuery = FirebaseFirestore.instance.collection('students');
       if (schoolId != null && !auth.isSuperAdmin) {
         studentQuery = studentQuery.where('schoolId', isEqualTo: schoolId);
@@ -99,10 +98,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         };
       }).toList();
       
-      // Filtrer initialement
       _filterStudentsByCycle();
       
-      // 2. Charger les paiements existants pour vérifier les mois déjà payés
       Query paymentQuery = FirebaseFirestore.instance.collection('payments');
       if (schoolId != null && !auth.isSuperAdmin) {
         paymentQuery = paymentQuery.where('schoolId', isEqualTo: schoolId);
@@ -128,7 +125,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         }
       }
       
-      // 3. Si en mode édition, charger les données du paiement
       if (widget.payment != null) {
         amountController.text = widget.payment!['amount']?.toString() ?? '';
         feeType = widget.payment!['feeType'] ?? "Frais de l'État";
@@ -169,7 +165,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         }).toList();
       }
       
-      // Réinitialiser la sélection si l'étudiant n'est plus dans la liste filtrée
       if (selectedStudent != null && 
           !filteredStudents.any((s) => s['firestoreId'] == selectedStudent!['firestoreId'])) {
         selectedStudent = null;
@@ -200,70 +195,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
     return paidMonthsByStudent.containsKey(studentId) &&
            paidMonthsByStudent[studentId]!.contains(periodKey);
   }
-
-  /// 🔥 Sauvegarder le paiement directement dans Firestore
- Future<void> _save() async {
-  if (!_formKey.currentState!.validate() || selectedStudent == null) return;
-
-  final auth = Provider.of<AuthProvider>(context, listen: false);
-  final String? schoolId = auth.currentSchoolId;  // 🔥 String?
-
-  // 🔥 Vérification que schoolId n'est pas null
-  if (schoolId == null) {
-    _showSnackBar("Erreur: École non identifiée", const Color(0xFFEF4444));
-    return;
-  }
-
-  if (widget.payment == null && _isAlreadyPaid()) {
-    final confirmed = await _showAlreadyPaidDialog();
-    if (!confirmed) return;
-  }
-
-  final monthForDb = isSemester ? selectedPeriod : selectedPeriod;
-  final monthNumber = _getMonthNumber(monthForDb);
-  
-  final paymentData = {
-    'studentFirestoreId': selectedStudent!['firestoreId'],
-    'fullName': selectedStudent!['fullName'],
-    'className': selectedStudent!['className'],
-    'classCycleType': selectedStudent!['classCycleType'] ?? 'primaire',
-    'sectionName': selectedStudent!['sectionName'],
-    'month': monthNumber,
-    'monthName': monthForDb,
-    'year': year,
-    'feeType': feeType,
-    'amount': double.tryParse(amountController.text) ?? 0.0,
-    'paymentDate': FieldValue.serverTimestamp(),
-    'schoolId': schoolId,  // 🔥 String
-    'status': 'paid',
-  };
-
-  try {
-   if (widget.payment == null) {
-  await FirebaseFirestore.instance.collection('payments').add(paymentData);
-  
-  // Convertir String? en int? si addLog attend int?
-  final int? schoolIdInt = int.tryParse(schoolId ?? '');
-  await db.addLog("Ajout paiement: ${selectedStudent!['fullName']} - $monthForDb $year", schoolId: schoolIdInt);
-  _showSnackBar("Paiement ajouté avec succès", const Color(0xFF10B981));
-}else {
-   if (widget.firestoreId != null) {
-  await FirebaseFirestore.instance
-      .collection('payments')
-      .doc(widget.firestoreId)
-      .update(paymentData);
-  
-  // Convertir String? en int? si addLog attend int?
-  final int? schoolIdInt = int.tryParse(schoolId ?? '');
-  await db.addLog("Modification paiement: ${selectedStudent!['fullName']}", schoolId: schoolIdInt);
-  _showSnackBar("Paiement modifié avec succès", const Color(0xFF10B981));
-}
-    }
-    Navigator.pop(context, true);
-  } catch (e) {
-    _showSnackBar("Erreur: $e", const Color(0xFFEF4444));
-  }
-}
 
   Future<bool> _showAlreadyPaidDialog() async {
     return await showDialog<bool>(
@@ -300,6 +231,157 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
     ) ?? false;
   }
 
+  Future<bool> _showGenerateReceiptDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.receipt_long_rounded, color: Color(0xFF10B981), size: 28),
+            const SizedBox(width: 10),
+            const Text("Générer le reçu?", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Le paiement pour ${selectedStudent!['fullName']} a été enregistré.\n\n"
+          "Voulez-vous générer un reçu ?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Non, merci"),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.receipt_long_rounded),
+            label: const Text("Générer le reçu"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  /// ✅ Sauvegarder le paiement et générer le reçu
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || selectedStudent == null) return;
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final String? schoolId = auth.currentSchoolId;
+
+    if (schoolId == null) {
+      _showSnackBar("Erreur: École non identifiée", const Color(0xFFEF4444));
+      return;
+    }
+
+    if (widget.payment == null && _isAlreadyPaid()) {
+      final confirmed = await _showAlreadyPaidDialog();
+      if (!confirmed) return;
+    }
+
+    final monthForDb = isSemester ? selectedPeriod : selectedPeriod;
+    final monthNumber = _getMonthNumber(monthForDb);
+    
+    final paymentData = {
+      'studentFirestoreId': selectedStudent!['firestoreId'],
+      'fullName': selectedStudent!['fullName'],
+      'className': selectedStudent!['className'],
+      'classCycleType': selectedStudent!['classCycleType'] ?? 'primaire',
+      'sectionName': selectedStudent!['sectionName'],
+      'month': monthNumber,
+      'monthName': monthForDb,
+      'year': year,
+      'feeType': feeType,
+      'amount': double.tryParse(amountController.text) ?? 0.0,
+      'paymentDate': FieldValue.serverTimestamp(),
+      'schoolId': schoolId,
+      'status': 'paid',
+    };
+
+    try {
+      String paymentId;
+      
+      if (widget.payment == null) {
+        // ✅ Ajout du paiement
+        final docRef = await FirebaseFirestore.instance.collection('payments').add(paymentData);
+        paymentId = docRef.id;
+        
+        final int? schoolIdInt = int.tryParse(schoolId ?? '');
+        await db.addLog("Ajout paiement: ${selectedStudent!['fullName']} - $monthForDb $year", schoolId: schoolIdInt);
+        _showSnackBar("Paiement ajouté avec succès", const Color(0xFF10B981));
+        
+        // ✅ Demander si l'utilisateur veut générer un reçu
+        final shouldGenerateReceipt = await _showGenerateReceiptDialog();
+        
+        if (shouldGenerateReceipt && mounted) {
+          // ✅ Naviguer vers l'écran du reçu
+          Navigator.pop(context, true);
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReceiptScreen(
+                paymentData: {
+                  ...paymentData,
+                  'paymentId': paymentId,
+                  'fullName': selectedStudent!['fullName'],
+                  'className': selectedStudent!['className'],
+                  'sectionName': selectedStudent!['sectionName'],
+                },
+                paymentId: paymentId,
+              ),
+            ),
+          );
+        } else {
+          Navigator.pop(context, true);
+        }
+      } else {
+        // ✅ Modification du paiement
+        if (widget.firestoreId != null) {
+          await FirebaseFirestore.instance
+              .collection('payments')
+              .doc(widget.firestoreId)
+              .update(paymentData);
+          
+          final int? schoolIdInt = int.tryParse(schoolId ?? '');
+          await db.addLog("Modification paiement: ${selectedStudent!['fullName']}", schoolId: schoolIdInt);
+          _showSnackBar("Paiement modifié avec succès", const Color(0xFF10B981));
+          
+          // ✅ Option pour régénérer le reçu
+          final shouldRegenerate = await _showGenerateReceiptDialog();
+          if (shouldRegenerate && mounted) {
+            Navigator.pop(context, true);
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReceiptScreen(
+                  paymentData: {
+                    ...paymentData,
+                    'paymentId': widget.firestoreId,
+                    'fullName': selectedStudent!['fullName'],
+                    'className': selectedStudent!['className'],
+                    'sectionName': selectedStudent!['sectionName'],
+                  },
+                  paymentId: widget.firestoreId!,
+                ),
+              ),
+            );
+          } else {
+            Navigator.pop(context, true);
+          }
+        }
+      }
+    } catch (e) {
+      _showSnackBar("Erreur: $e", const Color(0xFFEF4444));
+    }
+  }
+
+  // ... (tous les widgets _buildCycleSelector, _buildPeriodSelector, _buildPaidMonthsList restent identiques)
+  // Je les garde ici pour ne pas allonger, mais ils sont identiques à l'original
+  
   Widget _buildCycleSelector() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -412,9 +494,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
             },
             validator: (v) => v == null || v.isEmpty ? "Mois requis" : null,
           ),
-          
           const SizedBox(height: 12),
-          
           DropdownButtonFormField<int>(
             value: year,
             decoration: const InputDecoration(
@@ -536,6 +616,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         ),
                       ),
 
+                    // Carte élève
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -556,7 +637,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            // Sélecteur de cycle
                             _buildCycleSelector(),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<Map<String, dynamic>>(
@@ -618,6 +698,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                     
                     const SizedBox(height: 16),
                     
+                    // Carte type de frais
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -668,6 +749,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                     
                     const SizedBox(height: 16),
                     
+                    // Carte montant
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -711,6 +793,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                     
                     const SizedBox(height: 16),
                     
+                    // Carte période
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

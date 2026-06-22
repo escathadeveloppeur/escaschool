@@ -604,6 +604,52 @@ Future<void> addLog(String action, {int? schoolId}) async {
     final professors = _getProfessorsMap();
     return professors.values.map((e) => Map<String, dynamic>.from(e)).toList();
   }
+  // lib/services/db_helper.dart (extrait des méthodes à ajouter)
+
+/// Récupérer une annonce par son ID local
+Future<Map<String, dynamic>?> getAnnouncementByLocalId(dynamic localId) async {
+  try {
+    final box = await Hive.openBox<Map<String, dynamic>>('announcements');
+    final allAnnouncements = box.values.toList();
+    
+    for (var announcement in allAnnouncements) {
+      if (announcement['id'] == localId) {
+        return announcement;
+      }
+    }
+    return null;
+  } catch (e) {
+    print('❌ Erreur récupération annonce par localId: $e');
+    return null;
+  }
+}
+
+/// Mettre à jour une annonce par son ID local
+Future<void> updateAnnouncementByLocalId(dynamic localId, Map<String, dynamic> announcement) async {
+  try {
+    final box = await Hive.openBox<Map<String, dynamic>>('announcements');
+    
+    // Trouver la clé correspondant à l'ID local
+    for (var key in box.keys) {
+      final existing = box.get(key);
+      if (existing != null && existing['id'] == localId) {
+        // Mettre à jour l'annonce
+        final updatedAnnouncement = {
+          ...existing,
+          ...announcement,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+        await box.put(key, updatedAnnouncement);
+        print('✅ Annonce mise à jour localement: $localId');
+        return;
+      }
+    }
+    print('⚠️ Annonce non trouvée pour mise à jour: $localId');
+  } catch (e) {
+    print('❌ Erreur mise à jour annonce: $e');
+    throw e;
+  }
+}
 
 Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) async {
   final professors = await getAllProfessors();

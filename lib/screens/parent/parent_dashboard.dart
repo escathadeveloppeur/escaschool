@@ -11,6 +11,7 @@ import 'parent_children.dart';
 import 'parent_payments.dart';
 import 'parent_documents.dart';
 import 'parent_messages.dart';
+import 'parent_announcements.dart';
 
 class ParentDashboard extends StatefulWidget {
   const ParentDashboard({super.key});
@@ -30,6 +31,8 @@ class _ParentDashboardState extends State<ParentDashboard>
   int _pendingPayments = 0;
   int _unreadMessages = 0;
   int _totalDocuments = 0;
+  int _totalAbsences = 0;
+  int _newGradesCount = 0;
   bool _isLoading = true;
 
   late List<Widget> _pages;
@@ -50,6 +53,7 @@ class _ParentDashboardState extends State<ParentDashboard>
       {'title': 'Paiements', 'icon': Icons.payment, 'color': const Color(0xFFEF4444)},
       {'title': 'Documents', 'icon': Icons.folder, 'color': const Color(0xFF8B5CF6)},
       {'title': 'Messages', 'icon': Icons.message, 'color': const Color(0xFFEC4899)},
+      {'title': 'Annonces', 'icon': Icons.campaign, 'color': const Color(0xFFF97316)},
     ];
   }
 
@@ -83,11 +87,14 @@ class _ParentDashboardState extends State<ParentDashboard>
         final linksSnapshot = await parentLinksQuery.get();
         
         final List<String> childNames = [];
+        final List<String> childIds = [];
         for (var linkDoc in linksSnapshot.docs) {
           final data = linkDoc.data() as Map<String, dynamic>;
           final childName = data['studentName'];
+          final childId = data['studentId'];
           if (childName != null) {
             childNames.add(childName);
+            childIds.add(childId);
           }
         }
         
@@ -116,8 +123,69 @@ class _ParentDashboardState extends State<ParentDashboard>
           _children = _children.where((s) => s.schoolId == schoolId).toList();
         }
         
-        // 3. Compter les paiements en attente
         final childNamesList = _children.map((c) => c.fullName).toList();
+        final childIdsList = _children.map((c) => c.userId).toList();
+        
+        // 3. ✅ Compter les absences non justifiées (basé sur le champ reason)
+        _totalAbsences = 0;
+        if (childNamesList.isNotEmpty) {
+          for (var childName in childNamesList) {
+            // ✅ Récupérer les absences où reason est null ou vide
+            final absencesSnapshot = await FirebaseFirestore.instance
+                .collection('attendances')
+                .where('studentName', isEqualTo: childName)
+                .where('status', isEqualTo: 'absent')
+                .get();
+            
+            // Filtrer les absences non justifiées (reason null ou vide)
+            for (var doc in absencesSnapshot.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final reason = data['reason'] as String?;
+              // Si reason est null ou vide, c'est une absence non justifiée
+              if (reason == null || reason.isEmpty) {
+                _totalAbsences++;
+              }
+            }
+          }
+        }
+        
+        // 4. ✅ Compter les nouvelles notes/moyennes publiées
+        _newGradesCount = 0;
+        if (childNamesList.isNotEmpty) {
+          final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+          
+          for (var childName in childNamesList) {
+            final gradesSnapshot = await FirebaseFirestore.instance
+                .collection('grades')
+                .where('studentName', isEqualTo: childName)
+                .get();
+            
+            // Filtrer les notes récentes
+            for (var doc in gradesSnapshot.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final publishedAt = data['publishedAt'];
+              if (publishedAt != null) {
+                DateTime pubDate;
+                if (publishedAt is Timestamp) {
+                  pubDate = publishedAt.toDate();
+                } else if (publishedAt is String) {
+                  try {
+                    pubDate = DateTime.parse(publishedAt as String);
+                  } catch (e) {
+                    continue;
+                  }
+                } else {
+                  continue;
+                }
+                if (pubDate.isAfter(sevenDaysAgo)) {
+                  _newGradesCount++;
+                }
+              }
+            }
+          }
+        }
+        
+        // 5. Compter les paiements en attente
         if (childNamesList.isNotEmpty) {
           final paymentsSnapshot = await FirebaseFirestore.instance
               .collection('payments')
@@ -127,7 +195,7 @@ class _ParentDashboardState extends State<ParentDashboard>
           _pendingPayments = paymentsSnapshot.docs.length;
         }
         
-        // 4. Compter les messages non lus
+        // 6. Compter les messages non lus
         if (childNamesList.isNotEmpty) {
           final messagesSnapshot = await FirebaseFirestore.instance
               .collection('messages')
@@ -141,7 +209,7 @@ class _ParentDashboardState extends State<ParentDashboard>
           }).length;
         }
         
-        // 5. Compter les documents validés
+        // 7. Compter les documents validés
         if (childNamesList.isNotEmpty) {
           final documentsSnapshot = await FirebaseFirestore.instance
               .collection('documents')
@@ -152,6 +220,11 @@ class _ParentDashboardState extends State<ParentDashboard>
         }
         
         print('✅ Dashboard parent chargé: ${_children.length} enfants');
+        print('📊 Absences non justifiées: $_totalAbsences');
+        print('📊 Nouvelles notes: $_newGradesCount');
+        print('📊 Paiements en attente: $_pendingPayments');
+        print('📊 Messages non lus: $_unreadMessages');
+        print('📊 Documents: $_totalDocuments');
       } catch (e) {
         print('❌ Erreur chargement dashboard: $e');
         // Fallback vers Hive
@@ -167,6 +240,158 @@ class _ParentDashboardState extends State<ParentDashboard>
     
     setState(() => _isLoading = false);
     _animationController.forward(from: 0);
+  }
+
+  /// ✅ Afficher le dialogue de justification d'absence
+  void _showJustificationDialog(BuildContext context, String childName) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.note_add_rounded, color: Color(0xFFF59E0B), size: 28),
+            const SizedBox(width: 10),
+            const Text('Justifier une absence', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enfant: $childName',
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Motif de l\'absence:',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Ex: Maladie, Rendez-vous médical...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                prefixIcon: Icon(Icons.description_rounded),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Veuillez indiquer un motif'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              await _submitJustification(childName, reasonController.text.trim());
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Envoyer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ✅ Soumettre une justification d'absence
+  Future<void> _submitJustification(String childName, String reason) async {
+    try {
+      // Récupérer les absences non justifiées de l'élève (reason null ou vide)
+      final absencesSnapshot = await FirebaseFirestore.instance
+          .collection('attendances')
+          .where('studentName', isEqualTo: childName)
+          .where('status', isEqualTo: 'absent')
+          .get();
+      
+      final List<Map<String, dynamic>> unJustifiedAbsences = [];
+      for (var doc in absencesSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final currentReason = data['reason'] as String?;
+        if (currentReason == null || currentReason.isEmpty) {
+          unJustifiedAbsences.add({
+            'id': doc.id,
+            'data': data,
+          });
+        }
+      }
+      
+      if (unJustifiedAbsences.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aucune absence à justifier pour cet élève'),
+            backgroundColor: Color(0xFFF59E0B),
+          ),
+        );
+        return;
+      }
+      
+      // Mettre à jour chaque absence avec la justification
+      for (var absence in unJustifiedAbsences) {
+        await FirebaseFirestore.instance
+            .collection('attendances')
+            .doc(absence['id'])
+            .update({
+          'reason': reason, // ✅ Remplir le champ reason
+          'justifiedAt': FieldValue.serverTimestamp(),
+          'justifiedBy': 'parent',
+        });
+      }
+      
+      // Ajouter un message de notification pour l'école
+      await FirebaseFirestore.instance.collection('messages').add({
+        'senderId': 'parent',
+        'senderName': 'Parent',
+        'recipientRole': 'admin',
+        'subject': 'Justification d\'absence',
+        'content': 'Le parent a justifié l\'absence de $childName. Motif: $reason',
+        'studentName': childName,
+        'type': 'justification',
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Absence de $childName justifiée avec succès'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+      
+      // Recharger les données
+      await _loadDashboardDataFromFirestore();
+      
+    } catch (e) {
+      print('❌ Erreur justification: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildHomePage() {
@@ -229,8 +454,129 @@ class _ParentDashboardState extends State<ParentDashboard>
                   _buildStatCard('Enfants', _children.length.toString(), Icons.family_restroom, const Color(0xFF10B981)),
                   _buildStatCard('Documents', _totalDocuments.toString(), Icons.folder, const Color(0xFF8B5CF6)),
                   _buildStatCard('Paiements', '$_pendingPayments en attente', Icons.payment, const Color(0xFFF59E0B)),
-                  _buildStatCard('Messages', '$_unreadMessages non lus', Icons.message, const Color(0xFF3B82F6)),
+                  _buildStatCard('Absences', '$_totalAbsences à justifier', Icons.warning, const Color(0xFFEF4444)),
                 ],
+              ),
+            
+            if (_totalAbsences > 0 || _newGradesCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _totalAbsences > 0 
+                        ? const Color(0xFFEF4444).withOpacity(0.1) 
+                        : const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _totalAbsences > 0 
+                          ? const Color(0xFFEF4444).withOpacity(0.3) 
+                          : const Color(0xFF10B981).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_totalAbsences > 0)
+                        InkWell(
+                          onTap: () {
+                            _showAbsencesListDialog(context);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEF4444).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.warning_rounded, color: Color(0xFFEF4444), size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '⚠️ $_totalAbsences absence(s) non justifiée(s)',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFEF4444),
+                                        ),
+                                      ),
+                                      const Text(
+                                        'Cliquez pour justifier',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFFEF4444),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFEF4444)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (_totalAbsences > 0 && _newGradesCount > 0)
+                        const Divider(),
+                      if (_newGradesCount > 0)
+                        InkWell(
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('📊 $_newGradesCount nouvelle(s) note(s) disponible(s)'),
+                                backgroundColor: const Color(0xFF10B981),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.grade_rounded, color: Color(0xFF10B981), size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '📊 $_newGradesCount nouvelle(s) note(s) publiée(s)',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                      const Text(
+                                        'Consultez les résultats de votre enfant',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF10B981)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
 
             const SizedBox(height: 24),
@@ -274,15 +620,16 @@ class _ParentDashboardState extends State<ParentDashboard>
                   children: [
                     const Text('Derniers messages', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    if (_unreadMessages == 0)
-                      const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Aucun nouveau message', style: TextStyle(color: Colors.grey))))
-                    else
-                      _buildMessageItem('Message de l\'école', '$_unreadMessages message(s) non lu(s)', Icons.message, const Color(0xFFEC4899)),
-                    const Divider(),
-                    if (_pendingPayments > 0)
-                      _buildMessageItem('Paiements en attente', '$_pendingPayments paiement(s) à effectuer', Icons.payment, const Color(0xFFF59E0B)),
-                    if (_totalDocuments > 0)
-                      _buildMessageItem('Nouveaux documents', '$_totalDocuments document(s) disponible(s)', Icons.folder, const Color(0xFF8B5CF6)),
+                    if (_unreadMessages == 0 && _pendingPayments == 0 && _totalDocuments == 0)
+                      const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Aucune notification', style: TextStyle(color: Colors.grey))))
+                    else ...[
+                      if (_unreadMessages > 0)
+                        _buildMessageItem('Message de l\'école', '$_unreadMessages message(s) non lu(s)', Icons.message, const Color(0xFFEC4899)),
+                      if (_pendingPayments > 0)
+                        _buildMessageItem('Paiements en attente', '$_pendingPayments paiement(s) à effectuer', Icons.payment, const Color(0xFFF59E0B)),
+                      if (_totalDocuments > 0)
+                        _buildMessageItem('Nouveaux documents', '$_totalDocuments document(s) disponible(s)', Icons.folder, const Color(0xFF8B5CF6)),
+                    ],
                   ],
                 ),
               ),
@@ -296,17 +643,165 @@ class _ParentDashboardState extends State<ParentDashboard>
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, childAspectRatio: 0.9, crossAxisSpacing: 8, mainAxisSpacing: 8),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                childAspectRatio: 0.9,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
               itemCount: _menuItems.length - 1,
               itemBuilder: (context, index) {
                 final item = _menuItems[index + 1];
-                return _buildQuickMenuItem(item['title'], item['icon'], item['color'], () { setState(() => _selectedIndex = index + 1); });
+                return _buildQuickMenuItem(
+                  item['title'], 
+                  item['icon'], 
+                  item['color'], 
+                  () { setState(() => _selectedIndex = index + 1); }
+                );
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _showAbsencesListDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              constraints: const BoxConstraints(maxHeight: 500),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.warning_rounded, color: Color(0xFFEF4444), size: 28),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Absences à justifier',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: FutureBuilder(
+                      future: _getAbsencesWithDetails(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        
+                        if (!snapshot.hasData || (snapshot.data as List).isEmpty) {
+                          return const Center(
+                            child: Text('Aucune absence à justifier'),
+                          );
+                        }
+                        
+                        final absences = snapshot.data as List<Map<String, dynamic>>;
+                        
+                        return ListView.builder(
+                          itemCount: absences.length,
+                          itemBuilder: (context, index) {
+                            final absence = absences[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: const Color(0xFFEF4444).withOpacity(0.1),
+                                  child: const Icon(Icons.person_off_rounded, color: Color(0xFFEF4444)),
+                                ),
+                                title: Text(absence['studentName'] ?? 'Inconnu'),
+                                subtitle: Text('Date: ${_formatDate(absence['date'])}'),
+                                trailing: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _showJustificationDialog(context, absence['studentName'] ?? '');
+                                  },
+                                  icon: const Icon(Icons.edit_note_rounded, size: 16),
+                                  label: const Text('Justifier'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF59E0B),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// ✅ Récupérer les absences avec détails
+  Future<List<Map<String, dynamic>>> _getAbsencesWithDetails() async {
+    final List<Map<String, dynamic>> absences = [];
+    
+    try {
+      for (var child in _children) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('attendances')
+            .where('studentName', isEqualTo: child.fullName)
+            .where('status', isEqualTo: 'absent')
+            .get();
+        
+        for (var doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final reason = data['reason'] as String?;
+          // ✅ Seulement les absences non justifiées (reason null ou vide)
+          if (reason == null || reason.isEmpty) {
+            absences.add({
+              'id': doc.id,
+              'studentName': child.fullName,
+              'date': data['date'],
+              'className': child.className,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur récupération absences: $e');
+    }
+    
+    return absences;
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'Date inconnue';
+    try {
+      final DateTime d;
+      if (date is Timestamp) {
+        d = date.toDate();
+      } else if (date is String) {
+        d = DateTime.parse(date);
+      } else {
+        return 'Date inconnue';
+      }
+      return '${d.day}/${d.month}/${d.year}';
+    } catch (e) {
+      return 'Date inconnue';
+    }
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
@@ -383,6 +878,7 @@ class _ParentDashboardState extends State<ParentDashboard>
       const ParentPaymentsScreen(),
       const ParentDocumentsScreen(),
       const ParentMessagesScreen(),
+      const ParentAnnouncementsScreen(),
     ];
     
     return Scaffold(

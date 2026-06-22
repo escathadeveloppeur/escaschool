@@ -14,6 +14,7 @@ import 'attendance_report.dart';
 import 'manage_staff_screen.dart';
 import 'staff_payments_screen.dart';
 import 'staff_messages_screen.dart';
+import 'staff_announcements.dart'; // ✅ NOUVEAU : Page des annonces
 
 // ===================== PALETTE / THEME HELPERS =====================
 class _AppColors {
@@ -47,6 +48,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
   int totalParents = 0;
   int totalStaff = 0;
   int totalUnreadMessages = 0;
+  int totalAnnouncements = 0; // ✅ NOUVEAU
 
   final List<String> titles = [
     "Dashboard Personnel",
@@ -59,6 +61,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
     "Personnel",
     "Paiements Personnel",
     "Messages",
+    "Annonces",      // ✅ NOUVEAU
     "Historique",
   ];
 
@@ -74,6 +77,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
     final schoolId = auth.currentSchoolId;
     
     try {
+      // Élèves
       Query studentQuery = FirebaseFirestore.instance.collection('students');
       if (schoolId != null && !auth.isSuperAdmin) {
         studentQuery = studentQuery.where('schoolId', isEqualTo: schoolId);
@@ -81,6 +85,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       final studentsSnapshot = await studentQuery.get();
       totalStudents = studentsSnapshot.docs.length;
       
+      // Paiements
       Query paymentQuery = FirebaseFirestore.instance.collection('payments');
       if (schoolId != null && !auth.isSuperAdmin) {
         paymentQuery = paymentQuery.where('schoolId', isEqualTo: schoolId);
@@ -94,6 +99,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
         totalAmount += (data['amount'] as num?)?.toDouble() ?? 0.0;
       }
       
+      // Documents
       Query documentQuery = FirebaseFirestore.instance.collection('documents');
       if (schoolId != null && !auth.isSuperAdmin) {
         documentQuery = documentQuery.where('schoolId', isEqualTo: schoolId);
@@ -101,6 +107,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       final documentsSnapshot = await documentQuery.get();
       totalDocuments = documentsSnapshot.docs.length;
       
+      // Parents
       final parentsSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'parent')
@@ -115,6 +122,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       }
       totalParents = filteredParents;
       
+      // Personnel
       Query staffQuery = FirebaseFirestore.instance.collection('staff');
       if (schoolId != null && !auth.isSuperAdmin) {
         staffQuery = staffQuery.where('schoolId', isEqualTo: schoolId);
@@ -122,8 +130,16 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       final staffSnapshot = await staffQuery.get();
       totalStaff = staffSnapshot.docs.length;
       
+      // ✅ Annonces
+      Query announcementQuery = FirebaseFirestore.instance.collection('announcements');
+      if (schoolId != null && !auth.isSuperAdmin) {
+        announcementQuery = announcementQuery.where('schoolId', isEqualTo: schoolId);
+      }
+      final announcementSnapshot = await announcementQuery.get();
+      totalAnnouncements = announcementSnapshot.docs.length;
+      
       setState(() {});
-      print('✅ Dashboard chargé: $totalStudents étudiants');
+      print('✅ Dashboard chargé: $totalStudents étudiants, $totalAnnouncements annonces');
     } catch (e) {
       print('❌ Erreur chargement dashboard: $e');
     }
@@ -185,6 +201,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       const ManageStaffScreen(),
       StaffPaymentsScreen(staff: null),
       const StaffMessagesScreen(),
+      const StaffAnnouncementsScreen(), // ✅ NOUVEAU : Page des annonces
       _historyPage(),
     ];
 
@@ -324,7 +341,8 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
           _drawerItem(Icons.people_rounded, "Personnel", 7),
           _drawerItem(Icons.payments_rounded, "Paiements Personnel", 8),
           _buildMessagesDrawerItem(),
-          _drawerItem(Icons.history_rounded, "Historique", 10),
+          _drawerItem(Icons.campaign_rounded, "Annonces", 10), // ✅ NOUVEAU
+          _drawerItem(Icons.history_rounded, "Historique", 11), // ✅ Index mis à jour
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Divider(height: 24),
@@ -531,7 +549,8 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
               _statCard("Paiements", totalPayments.toString(), Icons.payment_rounded, const Color(0xFF10B981)),
               _statCard("Documents", totalDocuments.toString(), Icons.folder_open_rounded, const Color(0xFF3B82F6)),
               _statCard("Personnel", totalStaff.toString(), Icons.people_rounded, const Color(0xFF14B8A6)),
-              _statCard("Montant", "${totalAmount.toStringAsFixed(0)} FCFA", Icons.attach_money_rounded, const Color(0xFFEF4444)),
+              _statCard("Annonces", totalAnnouncements.toString(), Icons.campaign_rounded, const Color(0xFFEF4444)), // ✅ NOUVEAU
+              _statCard("Montant", "${totalAmount.toStringAsFixed(0)} FCFA", Icons.attach_money_rounded, const Color(0xFFF59E0B)),
             ],
           ),
           const SizedBox(height: 28),
@@ -589,6 +608,16 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
             title: "Gestion du personnel",
             subtitle: "$totalStaff membres du personnel",
             onTap: () => setState(() => selectedIndex = 7),
+          ),
+          const SizedBox(height: 12),
+
+          // ✅ NOUVEAU : Carte d'accès rapide aux annonces
+          _quickAccessCard(
+            icon: Icons.campaign_rounded,
+            iconColor: const Color(0xFFEF4444),
+            title: "Consulter les annonces",
+            subtitle: "$totalAnnouncements annonces disponibles",
+            onTap: () => setState(() => selectedIndex = 10),
           ),
           const SizedBox(height: 12),
 

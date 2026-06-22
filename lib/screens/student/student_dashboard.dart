@@ -1,4 +1,5 @@
 // lib/screens/student/student_dashboard.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +13,8 @@ import 'student_documents.dart';
 import 'student_payments.dart';
 import 'student_courses.dart';
 import 'student_exams.dart';
-import 'student_messages_screen.dart';  // ← AJOUTÉ
+import 'student_messages_screen.dart';
+import 'student_announcements.dart'; // ✅ NOUVEAU : Page des annonces
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -47,7 +49,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       {'title': 'Emploi du temps', 'icon': Icons.schedule, 'color': const Color(0xFF8B5CF6)},
       {'title': 'Documents', 'icon': Icons.folder, 'color': const Color(0xFF14B8A6)},
       {'title': 'Paiements', 'icon': Icons.payment, 'color': const Color(0xFFEF4444)},
-      {'title': 'Messages', 'icon': Icons.message, 'color': const Color(0xFF10B981)},  // ← AJOUTÉ
+      {'title': 'Messages', 'icon': Icons.message, 'color': const Color(0xFF10B981)},
+      {'title': 'Annonces', 'icon': Icons.campaign, 'color': const Color(0xFFF97316)}, // ✅ NOUVEAU
       {'title': 'Mon profil', 'icon': Icons.person, 'color': const Color(0xFF6366F1)},
       {'title': 'Épreuves', 'icon': Icons.quiz, 'color': const Color(0xFFF97316)},
       {'title': 'Cours', 'icon': Icons.menu_book, 'color': const Color(0xFF0F766E)},
@@ -60,7 +63,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       const StudentScheduleScreen(),
       const StudentDocumentsScreen(),
       const StudentPaymentsScreen(),
-      const StudentMessagesScreen(),  // ← AJOUTÉ
+      const StudentMessagesScreen(),
+      const StudentAnnouncementsScreen(), // ✅ NOUVEAU : Page des annonces
       const StudentProfileScreen(),
       const StudentExamsScreen(),
       const StudentCoursesScreen(),
@@ -391,6 +395,13 @@ class _StudentDashboardState extends State<StudentDashboard> {
                       'Échangez avec vos professeurs et vos parents',
                       Icons.message,
                       const Color(0xFF10B981),
+                    ),
+                    const Divider(),
+                    _buildInfoItem(
+                      'Annonces', // ✅ NOUVEAU
+                      'Consultez les annonces de l\'école',
+                      Icons.campaign,
+                      const Color(0xFFF97316),
                     ),
                     const Divider(),
                     _buildInfoItem(

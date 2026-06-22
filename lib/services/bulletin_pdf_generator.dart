@@ -148,7 +148,6 @@ class BulletinPdfGenerator {
       print('\n   📖 Traitement de la matière: "$subjectName"');
       print('      Nombre de notes: ${subjectGrades.length}');
       
-      // Récupérer les maxValues depuis la matière de la classe
       final subjectInfo = classSubjects.firstWhere(
         (s) => s['name'] == subjectName,
         orElse: () {
@@ -162,11 +161,9 @@ class BulletinPdfGenerator {
       final maxValues = subjectInfo['maxValues'];
       print('      maxValues: $maxValues');
       
-      // Valeurs par défaut (1ère catégorie)
       int p1Max = 10, p2Max = 10, ex1Max = 20;
       int p3Max = 10, p4Max = 10, ex2Max = 20;
       
-      // Appliquer les maxima selon la catégorie de la matière
       if (maxValues != null) {
         p1Max = maxValues['p1'] ?? 10;
         p2Max = maxValues['p2'] ?? 10;
@@ -179,20 +176,19 @@ class BulletinPdfGenerator {
         print('      ⚠️ Utilisation des valeurs par défaut');
       }
       
-      // Séparer les notes par semestre (utiliser le champ semester)
- final sem1Grades = subjectGrades.where((g) {
-  final date = g['date'] as DateTime;
-  return date.month <= 6; // Janvier à Juin = Semestre 1
-}).toList();
+      final sem1Grades = subjectGrades.where((g) {
+        final date = g['date'] as DateTime;
+        return date.month <= 6;
+      }).toList();
 
-final sem2Grades = subjectGrades.where((g) {
-  final date = g['date'] as DateTime;
-  return date.month > 6; // Juillet à Décembre = Semestre 2
-}).toList();
+      final sem2Grades = subjectGrades.where((g) {
+        final date = g['date'] as DateTime;
+        return date.month > 6;
+      }).toList();
+      
       print('      Semestre 1: ${sem1Grades.length} notes');
       print('      Semestre 2: ${sem2Grades.length} notes');
       
-      // Calculer les moyennes sur le barème de la période (pas sur 20)
       final p1 = _calculatePeriodAverage(
         sem1Grades.where((g) => _isDevoir1(g['evaluationType'])).toList(), 
         p1Max
@@ -243,32 +239,25 @@ final sem2Grades = subjectGrades.where((g) {
     return courses;
   }
 
-  /// Vérifie si le type d'évaluation correspond à Devoir 1
   static bool _isDevoir1(String evaluationType) {
     final cleanType = evaluationType.replaceAll(' S2', '').trim();
     return cleanType == 'Devoir 1';
   }
 
-  /// Vérifie si le type d'évaluation correspond à Devoir 2
   static bool _isDevoir2(String evaluationType) {
     final cleanType = evaluationType.replaceAll(' S2', '').trim();
     return cleanType == 'Devoir 2';
   }
 
-  /// Vérifie si le type d'évaluation correspond à Examen
   static bool _isExamen(String evaluationType) {
     final cleanType = evaluationType.replaceAll(' S2', '').trim();
     return cleanType == 'Examen';
   }
 
-  /// Calcule la moyenne sur l'échelle de la période (periodMax)
-  /// Formule: (Note obtenue / Max individuel) × part proportionnelle du periodMax
-  /// Résultat: total des points obtenus sur periodMax
   static double _calculatePeriodAverage(List<Map<String, dynamic>> grades, int periodMax) {
     if (grades.isEmpty) return 0;
     if (periodMax == 0) return 0;
     
-    // 1. Calculer la somme pondérée des max individuels
     double totalWeightedMax = 0;
     for (var grade in grades) {
       totalWeightedMax += (grade['maxScore'] as double) * (grade['coefficient'] as double);
@@ -276,7 +265,6 @@ final sem2Grades = subjectGrades.where((g) {
     
     if (totalWeightedMax == 0) return 0;
     
-    // 2. Facteur de conversion pour ramener au periodMax
     final conversionFactor = periodMax / totalWeightedMax;
     
     double totalObtained = 0;
@@ -286,16 +274,12 @@ final sem2Grades = subjectGrades.where((g) {
       final maxScore = grade['maxScore'] as double;
       final coefficient = grade['coefficient'] as double;
       
-      // 3. Part de cette évaluation dans le periodMax
       final partPeriodMax = maxScore * coefficient * conversionFactor;
-      
-      // 4. Points obtenus sur cette part
       final pointsObtained = (score / maxScore) * partPeriodMax;
       
       totalObtained += pointsObtained;
     }
     
-    // Retourner le total obtenu (sur periodMax)
     return totalObtained;
   }
 
@@ -304,38 +288,88 @@ final sem2Grades = subjectGrades.where((g) {
   // ===============================================================
 
   static _Statistics _calculateStatistics(List<_CourseData> courses) {
-    print('\n📊 STATISTIQUES');
-    double totalGeneral = 0;
-    double maximumGeneral = 0;
+  print('\n📊 STATISTIQUES');
+  
+  // ✅ Utiliser des doubles pour les totaux
+  double totalP1 = 0.0, totalP2 = 0.0, totalEx1 = 0.0;
+  double totalP3 = 0.0, totalP4 = 0.0, totalEx2 = 0.0;
+  
+  double maxP1 = 0.0, maxP2 = 0.0, maxEx1 = 0.0;
+  double maxP3 = 0.0, maxP4 = 0.0, maxEx2 = 0.0;
+  
+  for (var c in courses) {
+    totalP1 += c.p1;
+    totalP2 += c.p2;
+    totalEx1 += c.ex1;
+    totalP3 += c.p3;
+    totalP4 += c.p4;
+    totalEx2 += c.ex2;
     
-    for (var c in courses) {
-      print('   ${c.nom}: total=${c.totalGeneral}/${c.totalMax}');
-      totalGeneral += c.totalGeneral;
-      maximumGeneral += c.totalMax;
-    }
-    
-    final double pourcentage = maximumGeneral > 0 ? (totalGeneral / maximumGeneral) * 100 : 0;
-    
-    String decision;
-    if (pourcentage >= 80) decision = "EXCELLENT";
-    else if (pourcentage >= 70) decision = "TRES BIEN";
-    else if (pourcentage >= 60) decision = "BIEN";
-    else if (pourcentage >= 50) decision = "SATISFAISANT";
-    else decision = "ECHEC";
-    
-    print('   Total général: $totalGeneral');
-    print('   Maximum général: $maximumGeneral');
-    print('   Pourcentage: ${pourcentage.toStringAsFixed(2)}%');
-    print('   Décision: $decision\n');
-    
-    return _Statistics(
-      totalGeneral: totalGeneral,
-      maximumGeneral: maximumGeneral,
-      pourcentage: pourcentage,
-      decision: decision,
-    );
+    // ✅ Conversion en double avec .toDouble()
+    maxP1 += c.p1Max.toDouble();
+    maxP2 += c.p2Max.toDouble();
+    maxEx1 += c.ex1Max.toDouble();
+    maxP3 += c.p3Max.toDouble();
+    maxP4 += c.p4Max.toDouble();
+    maxEx2 += c.ex2Max.toDouble();
   }
-
+  
+  final pourcentageP1 = maxP1 > 0 ? (totalP1 / maxP1) * 100 : 0.0;
+  final pourcentageP2 = maxP2 > 0 ? (totalP2 / maxP2) * 100 : 0.0;
+  final pourcentageEx1 = maxEx1 > 0 ? (totalEx1 / maxEx1) * 100 : 0.0;
+  final pourcentageP3 = maxP3 > 0 ? (totalP3 / maxP3) * 100 : 0.0;
+  final pourcentageP4 = maxP4 > 0 ? (totalP4 / maxP4) * 100 : 0.0;
+  final pourcentageEx2 = maxEx2 > 0 ? (totalEx2 / maxEx2) * 100 : 0.0;
+  
+  // Pourcentage Semestre 1 (P1 + P2 + EX1)
+  final totalP1P2Ex1 = totalP1 + totalP2 + totalEx1;
+  final maxP1P2Ex1 = maxP1 + maxP2 + maxEx1;
+  final pourcentageSem1 = maxP1P2Ex1 > 0 ? (totalP1P2Ex1 / maxP1P2Ex1) * 100 : 0.0;
+  
+  // Pourcentage Semestre 2 (P3 + P4 + EX2)
+  final totalP3P4Ex2 = totalP3 + totalP4 + totalEx2;
+  final maxP3P4Ex2 = maxP3 + maxP4 + maxEx2;
+  final pourcentageSem2 = maxP3P4Ex2 > 0 ? (totalP3P4Ex2 / maxP3P4Ex2) * 100 : 0.0;
+  
+  // Pourcentage général
+  final totalGeneral = totalP1P2Ex1 + totalP3P4Ex2;
+  final maximumGeneral = maxP1P2Ex1 + maxP3P4Ex2;
+  final pourcentageGeneral = maximumGeneral > 0 ? (totalGeneral / maximumGeneral) * 100 : 0.0;
+  
+  String decision;
+  if (pourcentageGeneral >= 80) decision = "EXCELLENT";
+  else if (pourcentageGeneral >= 70) decision = "TRES BIEN";
+  else if (pourcentageGeneral >= 60) decision = "BIEN";
+  else if (pourcentageGeneral >= 50) decision = "SATISFAISANT";
+  else decision = "ECHEC";
+  
+  print('   Pourcentages par période:');
+  print('      P1: ${pourcentageP1.toStringAsFixed(2)}%');
+  print('      P2: ${pourcentageP2.toStringAsFixed(2)}%');
+  print('      EX1: ${pourcentageEx1.toStringAsFixed(2)}%');
+  print('      P3: ${pourcentageP3.toStringAsFixed(2)}%');
+  print('      P4: ${pourcentageP4.toStringAsFixed(2)}%');
+  print('      EX2: ${pourcentageEx2.toStringAsFixed(2)}%');
+  print('   Pourcentage Semestre 1: ${pourcentageSem1.toStringAsFixed(2)}%');
+  print('   Pourcentage Semestre 2: ${pourcentageSem2.toStringAsFixed(2)}%');
+  print('   Pourcentage Général: ${pourcentageGeneral.toStringAsFixed(2)}%');
+  print('   Décision: $decision\n');
+  
+  return _Statistics(
+    totalGeneral: totalGeneral,
+    maximumGeneral: maximumGeneral,
+    pourcentage: pourcentageGeneral,
+    decision: decision,
+    pourcentageP1: pourcentageP1,
+    pourcentageP2: pourcentageP2,
+    pourcentageEx1: pourcentageEx1,
+    pourcentageP3: pourcentageP3,
+    pourcentageP4: pourcentageP4,
+    pourcentageEx2: pourcentageEx2,
+    pourcentageSem1: pourcentageSem1,
+    pourcentageSem2: pourcentageSem2,
+  );
+}
   // ===============================================================
   // CONSTRUCTION DU BULLETIN COMPLET
   // ===============================================================
@@ -364,7 +398,10 @@ final sem2Grades = subjectGrades.where((g) {
             _buildMainTable(courses),
             pw.SizedBox(height: 12),
             _buildStatistics(stats, totalStudents, studentData),
-            pw.SizedBox(height: 15),
+            pw.SizedBox(height: 10),
+            // ✅ NOUVEAU: Ligne des pourcentages par période
+            _buildPeriodPercentages(stats),
+            pw.SizedBox(height: 12),
             _buildObservation(studentData),
             pw.SizedBox(height: 20),
             _buildSignatures(schoolInfo, teacherName),
@@ -470,13 +507,12 @@ final sem2Grades = subjectGrades.where((g) {
   }
 
   // ===============================================================
-  // TABLEAU PRINCIPAL DES NOTES (DYNAMIQUE SELON CATÉGORIES)
+  // TABLEAU PRINCIPAL DES NOTES
   // ===============================================================
 
   static pw.Widget _buildMainTable(List<_CourseData> courses) {
     print('\n📊 CONSTRUCTION DU TABLEAU');
     
-    // Grouper les cours par catégorie (basé sur totalMax)
     final Map<int, List<_CourseData>> coursesByMax = {};
     for (var c in courses) {
       final maxTotal = c.totalMax;
@@ -487,13 +523,11 @@ final sem2Grades = subjectGrades.where((g) {
       print('   ${c.nom}: totalMax=$maxTotal');
     }
     
-    // Trier les catégories par ordre croissant
     final sortedMaxTotals = coursesByMax.keys.toList()..sort();
     print('   Catégories trouvées: $sortedMaxTotals');
     
     final List<pw.TableRow> allRows = [];
     
-    // En-tête principal
     allRows.add(
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -512,7 +546,6 @@ final sem2Grades = subjectGrades.where((g) {
       ),
     );
     
-    // Pour chaque catégorie, afficher les cours et leurs maxima
     for (var maxTotal in sortedMaxTotals) {
       final categoryCourses = coursesByMax[maxTotal]!;
       if (categoryCourses.isEmpty) continue;
@@ -520,7 +553,6 @@ final sem2Grades = subjectGrades.where((g) {
       final sampleCourse = categoryCourses.first;
       print('   Catégorie MAX=$maxTotal: ${categoryCourses.length} cours');
       
-      // Ligne des maxima de la catégorie
       allRows.add(
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.grey200),
@@ -539,7 +571,6 @@ final sem2Grades = subjectGrades.where((g) {
         ),
       );
       
-      // Lignes des cours de cette catégorie
       for (var c in categoryCourses) {
         allRows.add(
           pw.TableRow(
@@ -609,6 +640,106 @@ final sem2Grades = subjectGrades.where((g) {
         _statBox("ABSENCES", absences.toString()),
         _statBox("DECISION", stats.decision),
       ],
+    );
+  }
+
+  // ===============================================================
+  // ✅ NOUVEAU: POURCENTAGES PAR PÉRIODE
+  // ===============================================================
+
+  static pw.Widget _buildPeriodPercentages(_Statistics stats) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(6),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(),
+        color: PdfColors.grey100,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text(
+            "POURCENTAGES PAR PÉRIODE",
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+            children: [
+              _periodBox("P1", stats.pourcentageP1),
+              _periodBox("P2", stats.pourcentageP2),
+              _periodBox("EX1", stats.pourcentageEx1),
+              _periodBox("P3", stats.pourcentageP3),
+              _periodBox("P4", stats.pourcentageP4),
+              _periodBox("EX2", stats.pourcentageEx2),
+            ],
+          ),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            children: [
+              _periodBoxSem("Semestre 1", stats.pourcentageSem1),
+              pw.SizedBox(width: 30),
+              _periodBoxSem("Semestre 2", stats.pourcentageSem2),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _periodBox(String label, double value) {
+    final color = value >= 50 ? PdfColors.green : PdfColors.red;
+    return pw.Container(
+      width: 50,
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Column(
+        children: [
+          pw.Text(
+            "${value.toStringAsFixed(1)}%",
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 9,
+              color: color,
+            ),
+          ),
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _periodBoxSem(String label, double value) {
+    final color = value >= 50 ? PdfColors.green : PdfColors.red;
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Row(
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Text(
+            "${value.toStringAsFixed(1)}%",
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 9,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -702,7 +833,7 @@ final sem2Grades = subjectGrades.where((g) {
 }
 
 // ===============================================================
-// MODÈLE DE COURS (AVEC MAXIMA PAR CATÉGORIE)
+// MODÈLE DE COURS
 // ===============================================================
 
 class _CourseData {
@@ -743,7 +874,7 @@ class _CourseData {
 }
 
 // ===============================================================
-// MODÈLE DE STATISTIQUES
+// MODÈLE DE STATISTIQUES (AVEC POURCENTAGES PAR PÉRIODE)
 // ===============================================================
 
 class _Statistics {
@@ -751,11 +882,28 @@ class _Statistics {
   final double maximumGeneral;
   final double pourcentage;
   final String decision;
+  // ✅ Nouveaux champs pour les pourcentages par période
+  final double pourcentageP1;
+  final double pourcentageP2;
+  final double pourcentageEx1;
+  final double pourcentageP3;
+  final double pourcentageP4;
+  final double pourcentageEx2;
+  final double pourcentageSem1;
+  final double pourcentageSem2;
 
   _Statistics({
     required this.totalGeneral,
     required this.maximumGeneral,
     required this.pourcentage,
     required this.decision,
+    this.pourcentageP1 = 0,
+    this.pourcentageP2 = 0,
+    this.pourcentageEx1 = 0,
+    this.pourcentageP3 = 0,
+    this.pourcentageP4 = 0,
+    this.pourcentageEx2 = 0,
+    this.pourcentageSem1 = 0,
+    this.pourcentageSem2 = 0,
   });
 }
