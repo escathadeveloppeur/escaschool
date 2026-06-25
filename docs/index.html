@@ -1,659 +1,534 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <meta name="description" content="Téléchargez EscaSchool, l'application de gestion scolaire pour Windows et Android. Gérez les élèves, enseignants, paiements, bulletins et présences." />
-    <title>EscaSchool - Téléchargement</title>
-    <style>
-        /* ===== RESET & BASE ===== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
-            background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDgwIDgwIj48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iODAiIGZpbGw9IiNmMGY0ZmYiLz48cGF0aCBkPSJNMzAgMTBhMTAgMTAgMCAwIDEgMjAgMCAxMCAxMCAwIDAgMS0yMCAweiIgZmlsbD0iI2UwZTdmZiIgb3BhY2l0eT0iMC41Ii8+PHJlY3QgeD0iMTUiIHk9IjU1IiB3aWR0aD0iNTAiIGhlaWdodD0iMTUiIHJ4PSI3IiBmaWxsPSIjZTBlN2ZmIiBvcGFjaXR5PSIwLjMiLz48Y2lyY2xlIGN4PSI2NSIgY3k9IjI1IiByPSI4IiBmaWxsPSIjZTBlN2ZmIiBvcGFjaXR5PSIwLjQiLz48L3N2Zz4=');
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            position: relative;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(145deg, rgba(240, 244, 255, 0.92) 0%, rgba(232, 237, 245, 0.95) 100%);
-            z-index: 0;
-        }
-
-        /* ===== CARTE PRINCIPALE ===== */
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(12px);
-            border-radius: 40px;
-            padding: 55px 50px;
-            max-width: 650px;
-            width: 100%;
-            box-shadow: 0 40px 100px rgba(26, 35, 126, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-            position: relative;
-            z-index: 1;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 50px 120px rgba(26, 35, 126, 0.25);
-        }
-
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 8px;
-            background: linear-gradient(90deg, #1e3a8a, #3b82f6, #10b981, #3b82f6, #1e3a8a);
-            background-size: 200% 100%;
-            animation: gradientMove 4s ease-in-out infinite;
-            border-radius: 40px 40px 0 0;
-        }
-
-        @keyframes gradientMove {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-
-        /* ===== HEADER ===== */
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .logo-icon {
-            width: 56px;
-            height: 56px;
-            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            box-shadow: 0 8px 28px rgba(59, 130, 246, 0.35);
-            transition: transform 0.3s ease;
-        }
-
-        .logo-icon:hover {
-            transform: scale(1.05) rotate(-3deg);
-        }
-
-        .logo-text h1 {
-            font-size: 26px;
-            font-weight: 800;
-            color: #1a237e;
-            letter-spacing: -0.8px;
-        }
-
-        .logo-text .tagline {
-            font-size: 13px;
-            color: #6b7280;
-            font-weight: 500;
-            letter-spacing: 0.3px;
-        }
-
-        .badge-version {
-            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-            color: #1b5e20;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 6px 16px;
-            border-radius: 30px;
-            border: 1px solid rgba(46, 125, 50, 0.2);
-            white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(46, 125, 50, 0.1);
-        }
-
-        /* ===== SEPARATEUR ===== */
-        .divider {
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #d1d9f0, transparent);
-            margin: 20px 0 26px;
-            border-radius: 2px;
-        }
-
-        /* ===== DESCRIPTION ===== */
-        .description {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .description p {
-            font-size: 16px;
-            color: #4b5563;
-            line-height: 1.7;
-        }
-
-        .description strong {
-            color: #1a237e;
-            font-weight: 700;
-        }
-
-        .description .highlight {
-            display: inline-block;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.08));
-            padding: 2px 10px;
-            border-radius: 20px;
-            color: #1a237e;
-        }
-
-        /* ===== BOUTONS ===== */
-        .download-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-bottom: 30px;
-        }
-
-        .download-btn {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            padding: 20px 28px;
-            border-radius: 20px;
-            text-decoration: none;
-            color: #fff;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: none;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .download-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-            transition: left 0.6s ease;
-        }
-
-        .download-btn:hover::before {
-            left: 100%;
-        }
-
-        .download-btn::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
-            pointer-events: none;
-        }
-
-        .download-btn:hover {
-            transform: translateY(-4px) scale(1.01);
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
-        }
-
-        .download-btn:active {
-            transform: scale(0.97);
-        }
-
-        /* Windows */
-        .download-btn.windows {
-            background: linear-gradient(135deg, #1a237e, #283593, #3b82f6);
-            background-size: 200% 100%;
-        }
-
-        .download-btn.windows:hover {
-            background-position: 100% 0;
-            box-shadow: 0 16px 40px rgba(59, 130, 246, 0.4);
-        }
-
-        /* Android */
-        .download-btn.android {
-            background: linear-gradient(135deg, #064e3b, #065f46, #10b981);
-            background-size: 200% 100%;
-        }
-
-        .download-btn.android:hover {
-            background-position: 100% 0;
-            box-shadow: 0 16px 40px rgba(16, 185, 129, 0.4);
-        }
-
-        .download-btn .icon {
-            font-size: 34px;
-            flex-shrink: 0;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-        }
-
-        .download-btn .info {
-            flex: 1;
-        }
-
-        .download-btn .info .label {
-            font-size: 18px;
-            font-weight: 700;
-            display: block;
-            letter-spacing: 0.3px;
-        }
-
-        .download-btn .info .sub {
-            font-size: 13px;
-            font-weight: 400;
-            opacity: 0.85;
-            display: block;
-            margin-top: 3px;
-        }
-
-        .download-btn .arrow {
-            font-size: 24px;
-            opacity: 0.8;
-            transition: transform 0.3s ease;
-            flex-shrink: 0;
-        }
-
-        .download-btn:hover .arrow {
-            transform: translateX(6px) scale(1.1);
-            opacity: 1;
-        }
-
-        /* ===== BOUTON REDISTRIBUTABLE ===== */
-        .redist-btn {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 14px 24px;
-            background: #f8fafc;
-            border: 2px dashed #94a3b8;
-            border-radius: 16px;
-            text-decoration: none;
-            color: #1e293b;
-            transition: all 0.3s ease;
-            margin-top: 4px;
-        }
-
-        .redist-btn:hover {
-            background: #f1f5f9;
-            border-color: #64748b;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
-        }
-
-        .redist-btn .icon {
-            font-size: 28px;
-            flex-shrink: 0;
-        }
-
-        .redist-btn .info .label {
-            font-size: 14px;
-            font-weight: 600;
-            display: block;
-        }
-
-        .redist-btn .info .sub {
-            font-size: 12px;
-            color: #64748b;
-            display: block;
-        }
-
-        .redist-btn .arrow {
-            font-size: 18px;
-            color: #94a3b8;
-            margin-left: auto;
-            flex-shrink: 0;
-            transition: transform 0.3s ease;
-        }
-
-        .redist-btn:hover .arrow {
-            transform: translateX(4px);
-            color: #475569;
-        }
-
-        /* ===== BADGE DE TÉLÉCHARGEMENT ===== */
-        .download-badge {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin-top: 4px;
-            flex-wrap: wrap;
-        }
-
-        .download-badge span {
-            font-size: 12px;
-            color: #9ca3af;
-            background: #f3f4f6;
-            padding: 4px 12px;
-            border-radius: 20px;
-        }
-
-        /* ===== STATS ===== */
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            margin: 28px 0 24px;
-            padding: 18px 0;
-            border-top: 2px solid #f0f0f0;
-            border-bottom: 2px solid #f0f0f0;
-        }
-
-        .stat-item {
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-
-        .stat-item:hover {
-            transform: translateY(-2px);
-        }
-
-        .stat-item .number {
-            font-size: 22px;
-            font-weight: 800;
-            color: #1a237e;
-            display: block;
-        }
-
-        .stat-item .label {
-            font-size: 12px;
-            color: #9ca3af;
-            font-weight: 500;
-            display: block;
-            margin-top: 2px;
-        }
-
-        /* ===== FOOTER ===== */
-        .footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-            font-size: 13px;
-            color: #9ca3af;
-            margin-top: 6px;
-        }
-
-        .footer .security {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: #6b7280;
-            background: #f9fafb;
-            padding: 6px 16px;
-            border-radius: 30px;
-        }
-
-        .footer .security span {
-            font-size: 16px;
-        }
-
-        .footer .copyright {
-            font-size: 12px;
-            color: #b0b8c8;
-        }
-
-        /* ===== RESPONSIVE ===== */
-        @media (max-width: 600px) {
-            .card {
-                padding: 30px 24px;
-                border-radius: 28px;
-            }
-
-            .header {
-                flex-wrap: wrap;
-                gap: 12px;
-            }
-
-            .logo-icon {
-                width: 44px;
-                height: 44px;
-                font-size: 24px;
-            }
-
-            .logo-text h1 {
-                font-size: 20px;
-            }
-
-            .badge-version {
-                font-size: 10px;
-                padding: 4px 12px;
-            }
-
-            .download-btn {
-                padding: 16px 20px;
-                gap: 14px;
-                border-radius: 16px;
-            }
-
-            .download-btn .icon {
-                font-size: 28px;
-            }
-
-            .download-btn .info .label {
-                font-size: 16px;
-            }
-
-            .download-btn .info .sub {
-                font-size: 12px;
-            }
-
-            .redist-btn {
-                padding: 12px 16px;
-                flex-wrap: wrap;
-            }
-
-            .redist-btn .arrow {
-                display: none;
-            }
-
-            .stats {
-                gap: 20px;
-                flex-wrap: wrap;
-                padding: 14px 0;
-            }
-
-            .stat-item .number {
-                font-size: 18px;
-            }
-
-            .footer {
-                flex-direction: column;
-                text-align: center;
-            }
-        }
-
-        @media (max-width: 400px) {
-            .card {
-                padding: 20px 16px;
-                border-radius: 24px;
-            }
-
-            .download-btn {
-                flex-wrap: wrap;
-                justify-content: center;
-                text-align: center;
-                gap: 10px;
-            }
-
-            .download-btn .arrow {
-                display: none;
-            }
-
-            .stats {
-                gap: 12px;
-            }
-
-            .stat-item .number {
-                font-size: 16px;
-            }
-        }
-
-        /* ===== ANIMATIONS ===== */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(40px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
-
-        .card {
-            animation: fadeInUp 0.7s cubic-bezier(0.4, 0, 0.2, 1) both;
-        }
-
-        .badge-version {
-            animation: pulse 3s ease-in-out infinite;
-        }
-
-        .redist-note {
-            font-size: 12px;
-            color: #94a3b8;
-            text-align: center;
-            margin-top: 12px;
-        }
-
-        .redist-note a {
-            color: #3b82f6;
-            text-decoration: none;
-        }
-
-        .redist-note a:hover {
-            text-decoration: underline;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EscaSchool — Gestion scolaire mondiale</title>
+  <!-- Font Awesome 6 (gratuit) pour les icônes -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ============ RESET & VARIABLES ============ */
+    *{margin:0;padding:0;box-sizing:border-box;}
+    :root{--blue:#1d4ed8;--blue-dark:#1e3a8a;--blue-light:#eff6ff;--green-dark:#065f46;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;--white:#fff;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#f8fafc;color:var(--text);}
+
+    /* ============ NAV ============ */
+    .nav{background:#fff;border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;}
+    .nav-brand{display:flex;align-items:center;gap:10px;}
+    .nav-logo{width:36px;height:36px;background:var(--blue-dark);border-radius:10px;display:flex;align-items:center;justify-content:center;}
+    .nav-logo i{font-size:18px;color:#fff;}
+    .nav-name{font-size:16px;font-weight:500;color:var(--text);}
+    .nav-version{font-size:11px;color:var(--blue);background:var(--blue-light);padding:2px 10px;border-radius:20px;border:1px solid #bfdbfe;font-weight:500;}
+    .nav-right{display:flex;align-items:center;gap:8px;}
+    .nav-pill{font-size:12px;color:var(--muted);background:#f1f5f9;padding:4px 12px;border-radius:6px;}
+
+    /* ============ HERO ============ */
+    .hero{background:var(--blue-dark);position:relative;overflow:hidden;padding:56px 32px 0;}
+    .hero-inner{max-width:680px;margin:0 auto;position:relative;z-index:2;}
+    .hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:5px 14px;font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:20px;}
+    .hero-eyebrow i{font-size:13px;}
+    .hero h1{font-size:40px;font-weight:500;color:#fff;line-height:1.15;letter-spacing:-1.5px;margin-bottom:16px;}
+    .hero h1 span{color:#93c5fd;}
+    .hero-desc{font-size:15px;color:rgba(255,255,255,0.7);line-height:1.8;margin-bottom:28px;max-width:500px;}
+    .hero-btns{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:40px;}
+    .btn-primary{display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--blue-dark);padding:12px 22px;border-radius:10px;font-size:14px;font-weight:500;text-decoration:none;transition:opacity .15s;}
+    .btn-primary:hover{opacity:.9;}
+    .btn-primary i{font-size:16px;}
+    .btn-secondary{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.1);color:#fff;padding:12px 22px;border-radius:10px;font-size:14px;text-decoration:none;border:1px solid rgba(255,255,255,0.2);transition:background .15s;}
+    .btn-secondary:hover{background:rgba(255,255,255,0.15);}
+    .btn-secondary i{font-size:16px;}
+    .hero-stats{display:flex;gap:32px;padding:20px 0;border-top:1px solid rgba(255,255,255,0.1);}
+    .h-stat .num{font-size:22px;font-weight:500;color:#fff;display:block;}
+    .h-stat .lbl{font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;display:block;}
+    .hero-photo{margin:0 -32px;position:relative;}
+    .hero-photo img{width:100%;height:280px;object-fit:cover;object-position:center 30%;display:block;}
+    .hero-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,rgba(30,58,138,0.5) 0%,transparent 40%,rgba(30,58,138,0.6) 100%);}
+    .hero-photo-caption{position:absolute;bottom:16px;left:24px;z-index:2;display:flex;align-items:center;gap:8px;color:#fff;font-size:12px;opacity:.8;}
+    .hero-photo-caption i{font-size:14px;}
+
+    /* ============ STRIP ============ */
+    .strip{background:#1e40af;padding:12px 32px;display:flex;gap:24px;overflow-x:auto;}
+    .strip-item{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px;color:rgba(255,255,255,0.75);}
+    .strip-item i{font-size:14px;color:#93c5fd;}
+
+    /* ============ SECTIONS GÉNÉRIQUES ============ */
+    .section{padding:48px 32px;}
+    .section.alt{background:#fff;}
+    .eyebrow{font-size:11px;font-weight:500;color:var(--blue);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;}
+    .section-title{font-size:26px;font-weight:500;letter-spacing:-0.8px;margin-bottom:8px;color:var(--text);}
+    .section-sub{font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:32px;max-width:480px;}
+
+    /* ============ FOUNDER ============ */
+    .founder-row{display:flex;align-items:center;gap:16px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:14px;padding:20px;margin-bottom:32px;}
+    .founder-av{width:54px;height:54px;background:var(--blue-dark);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .founder-av i{font-size:26px;color:#fff;}
+    .f-name{font-size:15px;font-weight:500;color:#0c447c;}
+    .f-role{font-size:12px;color:#185fa5;margin-top:2px;}
+    .f-company{font-size:12px;color:var(--blue);font-weight:500;margin-top:3px;display:flex;align-items:center;gap:4px;}
+    .f-company i{font-size:13px;}
+
+    /* ============ COMPÉTENCES ============ */
+    .skills-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0 32px 0;}
+    .skill-cat{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 16px;}
+    .skill-cat-title{font-size:14px;font-weight:600;color:var(--blue-dark);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+    .skill-cat-title i{font-size:18px;color:var(--blue);}
+    .skill-tags{display:flex;flex-wrap:wrap;gap:6px;}
+    .skill-tag{background:var(--blue-light);color:var(--blue-dark);font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;border:1px solid #bfdbfe;letter-spacing:0.3px;}
+    .skill-tag i{margin-right:4px;font-size:10px;}
+    .badge-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
+    .badge-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);background:#f1f5f9;padding:3px 12px;border-radius:20px;}
+    .badge-item i{color:var(--blue);font-size:13px;}
+
+    /* ============ FEATURES ============ */
+    .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .feat{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:transform .2s,box-shadow .2s;}
+    .feat:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.07);}
+    .feat.wide{grid-column:span 2;}
+    .feat img{width:100%;height:140px;object-fit:cover;display:block;}
+    .feat.wide img{height:180px;}
+    .feat-body{padding:14px 16px;}
+    .feat-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+    .feat-icon.blue{background:#dbeafe;} .feat-icon.blue i{color:#1d4ed8;}
+    .feat-icon.green{background:#d1fae5;} .feat-icon.green i{color:#065f46;}
+    .feat-icon.amber{background:#fef3c7;} .feat-icon.amber i{color:#92400e;}
+    .feat-icon.purple{background:#ede9fe;} .feat-icon.purple i{color:#5b21b6;}
+    .feat-icon.teal{background:#ccfbf1;} .feat-icon.teal i{color:#0f766e;}
+    .feat-icon i{font-size:18px;}
+    .feat-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px;}
+    .feat-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+
+    /* ============ STEPS ============ */
+    .steps{display:flex;flex-direction:column;gap:0;}
+    .step{display:flex;gap:16px;padding:20px 0;border-bottom:1px solid var(--border);}
+    .step:last-child{border-bottom:none;}
+    .step-num{width:36px;height:36px;border-radius:50%;background:var(--blue-dark);color:#fff;font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+    .step-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px;}
+    .step-desc{font-size:13px;color:var(--muted);line-height:1.6;}
+    .step-img{width:80px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0;margin-left:auto;}
+
+    /* ============ DOWNLOAD ============ */
+    .dl-section{background:var(--blue-dark);padding:48px 32px;}
+    .dl-title{font-size:26px;font-weight:500;color:#fff;letter-spacing:-0.8px;margin-bottom:8px;}
+    .dl-sub{font-size:14px;color:rgba(255,255,255,0.6);margin-bottom:28px;line-height:1.7;}
+    .dl-cards{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;}
+    .dl-card{display:flex;align-items:center;gap:14px;padding:18px 20px;border-radius:14px;text-decoration:none;color:#fff;transition:opacity .15s,transform .15s;border:1px solid rgba(255,255,255,0.1);}
+    .dl-card:hover{opacity:.92;transform:translateY(-2px);}
+    .dl-card.win{background:#1e293b;}
+    .dl-card.apk{background:#064e3b;}
+    .dl-card-icon{width:44px;height:44px;background:rgba(255,255,255,0.1);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .dl-card-icon i{font-size:22px;color:#fff;}
+    .dl-card-info{flex:1;}
+    .dl-card-name{font-size:15px;font-weight:500;display:block;}
+    .dl-card-desc{font-size:12px;opacity:.6;display:block;margin-top:3px;}
+    .dl-card i.arr{font-size:20px;opacity:.5;}
+    .redist-link{display:flex;align-items:center;gap:12px;padding:14px 18px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;text-decoration:none;color:rgba(255,255,255,0.7);transition:background .15s;}
+    .redist-link:hover{background:rgba(255,255,255,0.1);}
+    .redist-link i.ic{font-size:18px;color:rgba(255,255,255,0.5);}
+    .redist-title{font-size:13px;font-weight:500;color:rgba(255,255,255,0.85);}
+    .redist-note-txt{font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;}
+    .redist-link i.arr{font-size:16px;margin-left:auto;opacity:.4;}
+    .redist-hint{font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-top:10px;}
+    .trust-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:28px;}
+    .trust-badge{font-size:11px;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:5px 13px;display:flex;align-items:center;gap:5px;}
+    .trust-badge i{font-size:13px;color:rgba(255,255,255,0.4);}
+
+    /* ============ NOUVEAUX STYLES POUR PRICING, CONTACT, FAQ ============ */
+    .pricing-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;max-width:500px;margin:0 auto 32px;}
+    .pricing-amount{font-size:42px;font-weight:600;color:var(--blue-dark);}
+    .pricing-amount small{font-size:18px;font-weight:400;color:var(--muted);}
+    .pricing-desc{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6;}
+    .pricing-note{background:var(--blue-light);border-radius:10px;padding:12px;font-size:12px;color:var(--blue-dark);border:1px solid #bfdbfe;margin-top:16px;}
+
+    .contact-card{display:flex;align-items:center;gap:16px;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:14px;padding:16px 20px;margin:20px 0;}
+    .contact-icon{width:48px;height:48px;background:var(--blue-dark);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .contact-icon i{font-size:22px;color:#fff;}
+    .contact-info{flex:1;}
+    .contact-info .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+    .contact-info .value{font-size:18px;font-weight:500;color:var(--blue-dark);margin-top:2px;}
+
+    .faq-item{padding:16px 0;border-bottom:1px solid var(--border);}
+    .faq-item:last-child{border-bottom:none;}
+    .faq-q{font-size:14px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:8px;}
+    .faq-q i{color:var(--blue);font-size:14px;}
+    .faq-a{font-size:13px;color:var(--muted);line-height:1.6;margin-top:6px;padding-left:28px;}
+
+    .testimonial-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:20px;}
+    .testimonial{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;}
+    .testimonial img{width:100%;height:100px;object-fit:cover;border-radius:8px;margin-bottom:10px;}
+    .testimonial p{font-size:13px;color:var(--text);line-height:1.5;}
+    .testimonial .author{font-size:12px;color:var(--muted);margin-top:8px;}
+
+    .map-placeholder{width:100%;height:200px;background:linear-gradient(135deg,#1e3a8a,#93c5fd);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;gap:12px;margin:20px 0;}
+    .map-placeholder i{font-size:32px;}
+
+    /* ============ FOOTER ============ */
+    .footer{background:#0f172a;padding:24px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+    .footer-brand{display:flex;align-items:center;gap:8px;}
+    .footer-brand-logo{width:28px;height:28px;background:#1e40af;border-radius:7px;display:flex;align-items:center;justify-content:center;}
+    .footer-brand-logo i{font-size:14px;color:#fff;}
+    .footer-name{font-size:13px;color:rgba(255,255,255,0.7);}
+    .footer-copy{font-size:11px;color:rgba(255,255,255,0.3);}
+    .footer-contact{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:6px;}
+    .footer-contact i{font-size:12px;}
+  </style>
 </head>
 <body>
 
-<div class="card">
+<!-- ============ NAVIGATION ============ -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo"><i class="fas fa-school" aria-hidden="true"></i></div>
+    <span class="nav-name">EscaSchool</span>
+    <span class="nav-version">v1.0.0</span>
+  </div>
+  <div class="nav-right">
+    <span class="nav-pill">ESC SERVICES</span>
+  </div>
+</nav>
 
-    <!-- HEADER -->
-    <div class="header">
-        <div class="logo">
-            <div class="logo-icon">📚</div>
-            <div class="logo-text">
-                <h1>Ecole App</h1>
-                <span class="tagline">Gestion scolaire simplifiée</span>
-            </div>
-        </div>
-        <span class="badge-version">v1.0.0</span>
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow"><i class="fas fa-sparkles" aria-hidden="true"></i> Nouveau · Version 1.0.0 disponible</div>
+    <h1>La gestion scolaire<br>repensée pour <span>le monde.</span></h1>
+    <p class="hero-desc">EscaSchool unifie la gestion des élèves, enseignants, paiements, bulletins et présences dans une seule application — moderne, rapide, fiable et accessible partout.</p>
+    <div class="hero-btns">
+      <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/EcoleApp-Windows.2.zip" class="btn-primary" download><i class="fas fa-download" aria-hidden="true"></i> Télécharger Windows</a>
+      <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/app-release.apk" class="btn-secondary" download><i class="fas fa-mobile-alt" aria-hidden="true"></i> Android APK</a>
     </div>
-
-    <div class="divider"></div>
-
-    <!-- DESCRIPTION -->
-    <div class="description">
-        <p>
-            <strong>Ecole App</strong> est une solution complète de gestion scolaire.
-            Téléchargez la version adaptée à votre appareil et gérez vos établissements
-            en toute simplicité.
-        </p>
+    <div class="hero-stats">
+      <div class="h-stat"><span class="num">1000+</span><span class="lbl">Établissements</span></div>
+      <div class="h-stat"><span class="num">6</span><span class="lbl">Modules</span></div>
+      <div class="h-stat"><span class="num">98%</span><span class="lbl">Satisfaction</span></div>
+      <div class="h-stat"><span class="num">24/7</span><span class="lbl">Support</span></div>
     </div>
+  </div>
+  <div class="hero-photo">
+    <img src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=900&h=320&fit=crop&crop=center" alt="Enseignant devant sa classe" />
+    <div style="position:absolute;bottom:16px;left:24px;z-index:2;display:flex;align-items:center;gap:8px;color:#fff;font-size:12px;opacity:.75;"><i class="fas fa-globe-americas" style="font-size:14px;" aria-hidden="true"></i> Disponible dans le monde entier</div>
+  </div>
+</div>
 
-    <!-- BOUTONS DE TÉLÉCHARGEMENT -->
-    <div class="download-grid">
+<!-- ============ STRIP ============ -->
+<div class="strip">
+  <div class="strip-item"><i class="fas fa-users" aria-hidden="true"></i> Gestion élèves</div>
+  <div class="strip-item"><i class="fas fa-chalkboard-teacher" aria-hidden="true"></i> Enseignants</div>
+  <div class="strip-item"><i class="fas fa-coins" aria-hidden="true"></i> Paiements</div>
+  <div class="strip-item"><i class="fas fa-file-alt" aria-hidden="true"></i> Bulletins</div>
+  <div class="strip-item"><i class="fas fa-calendar-check" aria-hidden="true"></i> Présences</div>
+  <div class="strip-item"><i class="fas fa-bullhorn" aria-hidden="true"></i> Annonces</div>
+  <div class="strip-item"><i class="fas fa-globe" aria-hidden="true"></i> International</div>
+</div>
 
-        <!-- ✅ Windows - ZIP COMPLET -->
-        <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/EcoleApp-Windows.1.zip"
-           class="download-btn windows"
-           download>
-            <span class="icon">🖥️</span>
-            <span class="info">
-                <span class="label">Windows (ZIP complet)</span>
-                <span class="sub">📦 ZIP à extraire • Windows 10 / 11</span>
-            </span>
-            <span class="arrow">→</span>
-        </a>
 
-        <!-- ✅ Android - APK -->
-        <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/app-release.apk"
-           class="download-btn android"
-           download>
-            <span class="icon">📱</span>
-            <span class="info">
-                <span class="label">Android</span>
-                <span class="sub">.apk • 84 MB • Android 5.0 et plus</span>
-            </span>
-            <span class="arrow">→</span>
-        </a>
+
+<!-- ============ SECTION FONCTIONNALITÉS AVEC IMAGE ATTRACTIVE POUR ENSEIGNANTS & ÉLÈVES ============ -->
+<div class="section">
+  <div class="eyebrow">Fonctionnalités</div>
+  <div class="section-title">Tout en un seul endroit</div>
+  <div class="section-sub">Six modules intégrés couvrant chaque aspect de la vie scolaire, de l'inscription à la diplomation.</div>
+  <div class="feat-grid">
+    <!-- Gestion élèves & enseignants avec une image plus attractive -->
+    <div class="feat wide">
+      <img src="https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=800&h=220&fit=crop&crop=center" alt="Élèves et enseignant en classe" />
+      <div class="feat-body">
+        <div class="feat-icon blue"><i class="fas fa-users" aria-hidden="true"></i></div>
+        <div class="feat-title">Gestion des élèves & enseignants</div>
+        <div class="feat-desc">Inscriptions rapides, dossiers complets, affectations aux classes, suivi des performances, gestion des emplois du temps, et bien plus. Une vue à 360° sur chaque acteur de l'établissement.</div>
+      </div>
     </div>
-
-    <!-- ⚠️ SECTION : Visual C++ Redistributable -->
-    <div style="margin: 8px 0 16px 0;">
-        <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe"
-           class="redist-btn"
-           target="_blank">
-            <span class="icon">⚙️</span>
-            <span class="info">
-                <span class="label">Visual C++ Redistributable</span>
-                <span class="sub">Nécessaire pour lancer l'application Windows (vcruntime140_1.dll)</span>
-            </span>
-            <span class="arrow">→</span>
-        </a>
-        <div class="redist-note">
-            💡 Si l'application ne se lance pas, <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe" target="_blank">téléchargez et installez</a> ce composant Microsoft.
-        </div>
+    <div class="feat">
+      <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=140&fit=crop" alt="Comptabilité et paiements" />
+      <div class="feat-body">
+        <div class="feat-icon amber"><i class="fas fa-coins" aria-hidden="true"></i></div>
+        <div class="feat-title">Paiements & frais</div>
+        <div class="feat-desc">Suivi des frais scolaires, reçus automatiques, historique complet des transactions et alertes de retard.</div>
+      </div>
     </div>
-
-    <!-- BADGE DE TÉLÉCHARGEMENT SÉCURISÉ -->
-    <div class="download-badge">
-        <span>🔒 HTTPS sécurisé</span>
-        <span>⚡ Téléchargement instantané</span>
-        <span>📦 ZIP complet pour Windows</span>
-        <span>🛠️ Visual C++ inclus</span>
+    <div class="feat">
+      <img src="https://images.unsplash.com/photo-1509062522246-3755977927d7?w=400&h=140&fit=crop" alt="Bulletins scolaires" />
+      <div class="feat-body">
+        <div class="feat-icon green"><i class="fas fa-file-alt" aria-hidden="true"></i></div>
+        <div class="feat-title">Bulletins officiels</div>
+        <div class="feat-desc">Génération automatique avec notes, moyennes, classements, appréciations et impression en un clic.</div>
+      </div>
     </div>
-
-    <!-- STATISTIQUES -->
-    <div class="stats">
-        <div class="stat-item">
-            <span class="number">2</span>
-            <span class="label">Plateformes</span>
-        </div>
-        <div class="stat-item">
-            <span class="number">100+</span>
-            <span class="label">Établissements</span>
-        </div>
-        <div class="stat-item">
-            <span class="number">24/7</span>
-            <span class="label">Disponible</span>
-        </div>
-        <div class="stat-item">
-            <span class="number">✅</span>
-            <span class="label">Sécurisé</span>
-        </div>
+    <div class="feat">
+      <img src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&h=140&fit=crop&crop=top" alt="Suivi présences" />
+      <div class="feat-body">
+        <div class="feat-icon teal"><i class="fas fa-calendar-check" aria-hidden="true"></i></div>
+        <div class="feat-title">Présences</div>
+        <div class="feat-desc">Marquage journalier des présences et absences par cours, avec alertes automatiques envoyées aux parents.</div>
+      </div>
     </div>
-
-    <!-- FOOTER -->
-    <div class="footer">
-        <div class="security">
-            <span>🔒</span> Téléchargement sécurisé
-        </div>
-        <div class="copyright">
-            © 2026 Ecole App
-        </div>
+    <div class="feat">
+      <img src="https://images.unsplash.com/photo-1588072432836-e10032774350?w=400&h=140&fit=crop" alt="Communication école" />
+      <div class="feat-body">
+        <div class="feat-icon purple"><i class="fas fa-bullhorn" aria-hidden="true"></i></div>
+        <div class="feat-title">Annonces ciblées</div>
+        <div class="feat-desc">Communiquez instantanément avec parents, élèves et enseignants via notifications push, SMS ou email.</div>
+      </div>
     </div>
+  </div>
+</div>
 
+<!-- ============ NOUVEAU : TARIFICATION ============ -->
+<div class="section alt">
+  <div class="eyebrow">Tarification</div>
+  <div class="section-title">Un coût abordable pour chaque élève</div>
+  <div class="section-sub">Un modèle simple et transparent, adapté à toutes les écoles, grandes ou petites.</div>
+  <div class="pricing-card">
+    <div class="pricing-amount">0,66666666 $ <small>/ élève / mois</small></div>
+    <div class="pricing-desc">
+      <strong>Facturation annuelle</strong> — 8 $ par élève par an (soit 0,66666666 $/mois).<br>
+      Aucun frais caché. Paiement sécurisé par l'école.
+    </div>
+    <div class="pricing-note">
+      <i class="fas fa-globe" style="margin-right:6px;"></i> Valable dans tous les pays du monde · Tarif unique.
+    </div>
+  </div>
+  <div style="text-align:center;font-size:13px;color:var(--muted);">
+    <i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Volume remisé pour les grands groupes · Contactez-nous.
+  </div>
+</div>
+
+<!-- ============ NOUVEAU : CRÉATION D'ÉCOLE & CODE ============ -->
+<div class="section">
+  <div class="eyebrow">Comment ça marche</div>
+  <div class="section-title">Création d'école & code d'activation</div>
+  <div class="section-sub">Chaque établissement reçoit un code unique généré par nos soins. Si votre école n'est pas encore enregistrée, nous vous fournissons ce code pour activer votre instance.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
+    <div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px;">
+      <i class="fas fa-key" style="font-size:28px;color:var(--blue);margin-bottom:10px;display:block;"></i>
+      <h4 style="font-size:15px;font-weight:500;margin-bottom:6px;">1. Demande de code</h4>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;">L'école contacte ESC SERVICES pour obtenir son code d'activation. Nous vérifions l'existence de l'établissement et générons un code unique.</p>
+    </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px;">
+      <i class="fas fa-check-circle" style="font-size:28px;color:var(--green-dark);margin-bottom:10px;display:block;"></i>
+      <h4 style="font-size:15px;font-weight:500;margin-bottom:6px;">2. Activation</h4>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;">L'administrateur de l'école entre le code dans l'application. L'école est alors activée et prête à être configurée (classes, élèves, enseignants, etc.).</p>
+    </div>
+  </div>
+  <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin-top:20px;">
+    <p style="font-size:13px;color:var(--blue-dark);display:flex;align-items:center;gap:10px;">
+      <i class="fas fa-info-circle" style="font-size:18px;"></i>
+      <span><strong>Vous n'avez pas encore de code ?</strong> Contactez-nous directement via le numéro ci-dessous ou par email, et nous vous enverrons votre code dans les 24 heures.</span>
+    </p>
+  </div>
+</div>
+
+<!-- ============ NOUVEAU : CONTACT AVEC NUMÉRO ============ -->
+<div class="section alt">
+  <div class="eyebrow">Contact</div>
+  <div class="section-title">Nous sommes à votre écoute</div>
+  <div class="section-sub">Pour toute question, demande de code, ou assistance, n'hésitez pas à nous joindre.</div>
+  <div class="contact-card">
+    <div class="contact-icon"><i class="fas fa-phone-alt"></i></div>
+    <div class="contact-info">
+      <div class="label">Téléphone (WhatsApp / appel)</div>
+      <div class="value"><a href="tel:+243813012087" style="color:var(--blue-dark);text-decoration:none;">+243 813 012 087</a></div>
+    </div>
+    <i class="fas fa-arrow-right" style="color:var(--blue);font-size:20px;"></i>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:12px;">
+    <span style="font-size:13px;color:var(--muted);"><i class="fas fa-envelope" style="color:var(--blue);"></i> Lukongadiabanzagyerschom@gmail.com</span>
+    <span style="font-size:13px;color:var(--muted);"><i class="fab fa-whatsapp" style="color:#25D366;"></i> +243 813 012 087</span>
+    <span style="font-size:13px;color:var(--muted);"><i class="fas fa-clock"></i> Disponible 24/7</span>
+  </div>
+</div>
+
+<!-- ============ NOUVEAU : TÉMOIGNAGES AVEC IMAGES ============ -->
+<div class="section">
+  <div class="eyebrow">Témoignages</div>
+  <div class="section-title">Ils nous font confiance</div>
+  <div class="section-sub">Des écoles du monde entier partagent leur expérience avec EscaSchool.</div>
+  <div class="testimonial-grid">
+    <div class="testimonial">
+      <img src="https://images.unsplash.com/photo-1523050854058-8df90110c7f1?w=400&h=100&fit=crop" alt="École en Afrique" />
+      <p>"EscaSchool a révolutionné la gestion de notre école. Le module de présence et les bulletins automatisés nous font gagner un temps précieux."</p>
+      <div class="author">— Directeur, École Primaire de Kinshasa</div>
+    </div>
+    <div class="testimonial">
+      <img src="https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=400&h=100&fit=crop" alt="École en Europe" />
+      <p>"Nous utilisons EscaSchool dans notre établissement en France. La simplicité d'utilisation et le support réactif sont remarquables."</p>
+      <div class="author">— Proviseur, Lycée International de Paris</div>
+    </div>
+    <div class="testimonial">
+      <img src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&h=100&fit=crop" alt="École en Amérique" />
+      <p>"Un outil puissant et abordable. Le coût par élève est imbattable. Nous l'avons adopté dans nos 5 campus au Brésil."</p>
+      <div class="author">— CEO, Groupe Scolaire Educa+</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NOUVEAU : CARTE MONDIALE ============ -->
+<div class="section alt">
+  <div class="eyebrow">Présence mondiale</div>
+  <div class="section-title">EscaSchool, partout dans le monde</div>
+  <div class="section-sub">Notre solution est utilisée sur tous les continents, avec une adaptation locale pour chaque pays.</div>
+  <div class="map-placeholder">
+    <i class="fas fa-globe-americas"></i>
+    <span>Disponible dans plus de 30 pays · Bientôt dans le vôtre</span>
+    <i class="fas fa-map-marked-alt"></i>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+    <span class="trust-badge" style="background:#e2e8f0;color:#0f172a;border:none;"><i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Afrique</span>
+    <span class="trust-badge" style="background:#e2e8f0;color:#0f172a;border:none;"><i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Europe</span>
+    <span class="trust-badge" style="background:#e2e8f0;color:#0f172a;border:none;"><i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Amérique</span>
+    <span class="trust-badge" style="background:#e2e8f0;color:#0f172a;border:none;"><i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Asie</span>
+    <span class="trust-badge" style="background:#e2e8f0;color:#0f172a;border:none;"><i class="fas fa-check-circle" style="color:var(--green-dark);"></i> Océanie</span>
+  </div>
+</div>
+
+<!-- ============ NOUVEAU : FAQ ============ -->
+<div class="section">
+  <div class="eyebrow">FAQ</div>
+  <div class="section-title">Questions fréquentes</div>
+  <div class="section-sub">Tout ce que vous devez savoir avant de démarrer.</div>
+  <div class="faq-item">
+    <div class="faq-q"><i class="fas fa-question-circle"></i> Comment obtenir le code d'activation pour mon école ?</div>
+    <div class="faq-a">Contactez-nous par téléphone au +243 813 012 087 ou par email. Nous vérifions les informations de votre établissement et vous envoyons un code unique sous 24h.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q"><i class="fas fa-question-circle"></i> Le paiement est-il vraiment de 0,66666666 $ par élève par mois ?</div>
+    <div class="faq-a">Oui, le tarif est fixe et universel. Vous ne payez que pour le nombre d'élèves actifs. La facturation est annuelle, ce qui revient à 8 $ par élève par an.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q"><i class="fas fa-question-circle"></i> L'application fonctionne-t-elle hors ligne ?</div>
+    <div class="faq-a">EscaSchool est conçue pour fonctionner en mode connecté, mais des fonctionnalités de base (consultation des données) sont disponibles hors ligne. La synchronisation se fait automatiquement dès que la connexion est rétablie.</div>
+  </div>
+  <div class="faq-item">
+    <div class="faq-q"><i class="fas fa-question-circle"></i> Quelles sont les langues disponibles ?</div>
+    <div class="faq-a">Actuellement, l'application est disponible en français, anglais, espagnol et portugais. D'autres langues seront ajoutées prochainement.</div>
+  </div>
+</div>
+<!-- ============ SECTION À PROPOS + COMPÉTENCES ============ -->
+<div class="section alt">
+  <div class="eyebrow">À propos</div>
+  <div class="section-title">Créé par ESC SERVICES</div>
+  <div class="section-sub">Une solution née des besoins réels des écoles, développée avec passion et expertise locale, désormais ouverte au monde entier.</div>
+  <div class="founder-row">
+    <div class="founder-av"><i class="fas fa-user" aria-hidden="true"></i></div>
+    <div style="flex:1;">
+      <div class="f-name">Lukonga Diabanza Guerschom</div>
+      <div class="f-role">Fondateur & CEO</div>
+      <div class="f-company"><i class="fas fa-building" aria-hidden="true"></i> ESC SERVICES · RDC</div>
+    </div>
+    <i class="fas fa-rocket" style="font-size:32px;color:#bfdbfe;" aria-hidden="true"></i>
+  </div>
+
+  <!-- Compétences -->
+  <div class="eyebrow" style="margin-top:16px;">Compétences & expertise</div>
+  <div class="section-title" style="font-size:22px;">Full-stack · DevSecOps · IA</div>
+  <div class="section-sub">Des compétences techniques variées pour concevoir des solutions robustes et évolutives.</div>
+  <div class="skills-grid">
+    <div class="skill-cat">
+      <div class="skill-cat-title"><i class="fas fa-code"></i> Développement</div>
+      <div class="skill-tags">
+        <span class="skill-tag"><i class="fab fa-python"></i> Python</span>
+        <span class="skill-tag"><i class="fab fa-js"></i> JavaScript/TS</span>
+        <span class="skill-tag"><i class="fab fa-react"></i> React</span>
+        <span class="skill-tag"><i class="fas fa-database"></i> SQL/NoSQL</span>
+        <span class="skill-tag"><i class="fab fa-node"></i> Node.js</span>
+        <span class="skill-tag"><i class="fas fa-mobile-alt"></i> Flutter</span>
+        <span class="skill-tag"><i class="fab fa-java"></i> Java</span>
+      </div>
+    </div>
+    <div class="skill-cat">
+      <div class="skill-cat-title"><i class="fas fa-cloud"></i> Infrastructure & Cloud</div>
+      <div class="skill-tags">
+        <span class="skill-tag"><i class="fab fa-aws"></i> AWS</span>
+        <span class="skill-tag"><i class="fab fa-docker"></i> Docker</span>
+        <span class="skill-tag"><i class="fas fa-code-branch"></i> CI/CD</span>
+        <span class="skill-tag"><i class="fas fa-server"></i> Linux</span>
+        <span class="skill-tag"><i class="fas fa-shield-alt"></i> DevSecOps</span>
+        <span class="skill-tag"><i class="fas fa-network-wired"></i> Réseaux</span>
+      </div>
+    </div>
+    <div class="skill-cat">
+      <div class="skill-cat-title"><i class="fas fa-brain"></i> Intelligence Artificielle</div>
+      <div class="skill-tags">
+        <span class="skill-tag"><i class="fas fa-robot"></i> NLP</span>
+        <span class="skill-tag"><i class="fas fa-chart-line"></i> Machine Learning</span>
+        <span class="skill-tag"><i class="fas fa-eye"></i> Computer Vision</span>
+        <span class="skill-tag"><i class="fas fa-dice-d6"></i> Deep Learning</span>
+        <span class="skill-tag"><i class="fas fa-language"></i> LLM / RAG</span>
+        <span class="skill-tag"><i class="fas fa-database"></i> Vector DB</span>
+      </div>
+    </div>
+    <div class="skill-cat">
+      <div class="skill-cat-title"><i class="fas fa-tools"></i> Outils & Méthodes</div>
+      <div class="skill-tags">
+        <span class="skill-tag"><i class="fab fa-git-alt"></i> Git/GitHub</span>
+        <span class="skill-tag"><i class="fas fa-terminal"></i> Bash</span>
+        <span class="skill-tag"><i class="fas fa-vial"></i> Tests</span>
+        <span class="skill-tag"><i class="fas fa-sync-alt"></i> Agile/Scrum</span>
+        <span class="skill-tag"><i class="fas fa-lock"></i> Sécurité</span>
+        <span class="skill-tag"><i class="fas fa-chart-pie"></i> Data viz</span>
+      </div>
+    </div>
+  </div>
+  <div class="badge-row">
+    <span class="badge-item"><i class="fas fa-microchip"></i> IoT & systèmes embarqués</span>
+    <span class="badge-item"><i class="fas fa-credit-card"></i> Fintech & paiements</span>
+    <span class="badge-item"><i class="fas fa-phone-alt"></i> SMS / USSD</span>
+    <span class="badge-item"><i class="fas fa-map-marked-alt"></i> Cartographie (GIS)</span>
+    <span class="badge-item"><i class="fas fa-print"></i> Impression & reporting</span>
+    <span class="badge-item"><i class="fas fa-globe-africa"></i> Solutions globales</span>
+  </div>
+</div>
+
+<!-- ============ TÉLÉCHARGEMENT ============ -->
+<div class="dl-section">
+  <div class="dl-title">Télécharger EscaSchool</div>
+  <div class="dl-sub">Gratuit pour commencer. Disponible sur Windows et Android. Support inclus.</div>
+  <div class="dl-cards">
+    <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/EcoleApp-Windows.2.zip" class="dl-card win" download>
+      <div class="dl-card-icon"><i class="fas fa-desktop" aria-hidden="true"></i></div>
+      <div class="dl-card-info">
+        <span class="dl-card-name">Windows — ZIP complet</span>
+        <span class="dl-card-desc">Extraire puis lancer ecole_app.exe · Windows 10 / 11</span>
+      </div>
+      <i class="fas fa-arrow-right arr" aria-hidden="true"></i>
+    </a>
+    <a href="https://github.com/escathadeveloppeur/escaschool/releases/download/v1.0.0/app-release.apk" class="dl-card apk" download>
+      <div class="dl-card-icon"><i class="fas fa-mobile-alt" aria-hidden="true"></i></div>
+      <div class="dl-card-info">
+        <span class="dl-card-name">Android — APK</span>
+        <span class="dl-card-desc">.apk · Compatible Android 5.0 et supérieur</span>
+      </div>
+      <i class="fas fa-arrow-right arr" aria-hidden="true"></i>
+    </a>
+  </div>
+  <a href="https://aka.ms/vs/17/release/vc_redist.x64.exe" class="redist-link" target="_blank">
+    <i class="fas fa-cog ic" aria-hidden="true"></i>
+    <div>
+      <div class="redist-title">Visual C++ Redistributable (Microsoft)</div>
+      <div class="redist-note-txt">Requis si l'application Windows ne démarre pas</div>
+    </div>
+    <i class="fas fa-external-link-alt arr" aria-hidden="true"></i>
+  </a>
+  <div class="redist-hint">Si l'app ne se lance pas, installez ce composant Microsoft en premier puis relancez EscaSchool.</div>
+  <div class="trust-row">
+    <div class="trust-badge"><i class="fas fa-lock" aria-hidden="true"></i> HTTPS sécurisé</div>
+    <div class="trust-badge"><i class="fas fa-shield-alt" aria-hidden="true"></i> Fichiers vérifiés</div>
+    <div class="trust-badge"><i class="fas fa-laptop" aria-hidden="true"></i> Multi-plateforme</div>
+    <div class="trust-badge"><i class="fas fa-headset" aria-hidden="true"></i> Support inclus</div>
+    <div class="trust-badge"><i class="fas fa-map-pin" aria-hidden="true"></i> Made in RDC</div>
+    <div class="trust-badge"><i class="fas fa-star" aria-hidden="true"></i> 100% satisfaction</div>
+  </div>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<div class="footer">
+  <div class="footer-brand">
+    <div class="footer-brand-logo"><i class="fas fa-school" aria-hidden="true"></i></div>
+    <span class="footer-name">EscaSchool par ESC SERVICES</span>
+  </div>
+  <div class="footer-contact">
+    <i class="fas fa-phone"></i> +243 813 012 087
+  </div>
+  <div class="footer-copy">© 2026 — Tous droits réservés</div>
 </div>
 
 </body>
