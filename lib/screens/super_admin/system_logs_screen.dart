@@ -23,7 +23,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
   
   final List<String> _logTypes = ['all', 'connexion', 'deconnexion', 'ajout_eleve', 'modification', 'suppression'];
   
-  // Liste des écoles pour le filtre
   List<Map<String, dynamic>> _schools = [];
 
   @override
@@ -44,7 +43,22 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     super.dispose();
   }
 
-  /// 🔥 Charger les écoles pour le filtre
+  /// 🔥 Fonction utilitaire pour convertir les dates
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    if (dateValue is Timestamp) return dateValue.toDate();
+    if (dateValue is String) {
+      try {
+        return DateTime.parse(dateValue);
+      } catch (e) {
+        print('⚠️ Erreur parsing date: $dateValue');
+        return DateTime.now();
+      }
+    }
+    if (dateValue is DateTime) return dateValue;
+    return DateTime.now();
+  }
+
   Future<void> _loadSchools() async {
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -67,9 +81,7 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     }
   }
 
-  /// 🔥 Récupérer les utilisateurs connectés en temps réel
   Future<void> _loadConnectedUsers() async {
-    // Écouter les sessions actives
     FirebaseFirestore.instance
         .collection('active_sessions')
         .snapshots()
@@ -83,12 +95,8 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
           'role': data['role'] ?? '',
           'schoolId': data['schoolId'],
           'schoolName': data['schoolName'] ?? '',
-          'loginTime': data['loginTime'] != null 
-              ? (data['loginTime'] as Timestamp).toDate() 
-              : DateTime.now(),
-          'lastActivity': data['lastActivity'] != null 
-              ? (data['lastActivity'] as Timestamp).toDate() 
-              : DateTime.now(),
+          'loginTime': _parseDate(data['loginTime']),
+          'lastActivity': _parseDate(data['lastActivity']),
         };
       }).toList();
       
@@ -98,7 +106,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     });
   }
 
-  /// 🔥 Charger les logs depuis Firestore avec tous les types d'actions
   Future<void> _loadLogsFromFirestore() async {
     setState(() => _isLoading = true);
     
@@ -122,28 +129,29 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
       
       final snapshot = await query.get();
       
-     _logs = snapshot.docs.map((doc) {
-  final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-  return {
-    'id': doc.id,
-    'action': data['action']?.toString() ?? '',
-    'actionType': data['actionType']?.toString() ?? 'autre',
-    'description': data['description']?.toString() ?? '',
-    'level': data['level']?.toString() ?? 'info',
-    'timestamp': (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    'schoolId': data['schoolId'],
-    'schoolName': data['schoolName'],
-    'userId': data['userId'],
-    'userName': data['userName'],
-    'userRole': data['userRole'],
-    'ipAddress': data['ipAddress'],
-    'details': data['details'],
-  };
-}).toList();
+      // ✅ Correction: utiliser _parseDate au lieu de (data['timestamp'] as Timestamp)
+      _logs = snapshot.docs.map((doc) {
+        final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'action': data['action']?.toString() ?? '',
+          'actionType': data['actionType']?.toString() ?? 'autre',
+          'description': data['description']?.toString() ?? '',
+          'level': data['level']?.toString() ?? 'info',
+          'timestamp': _parseDate(data['timestamp']),
+          'schoolId': data['schoolId'],
+          'schoolName': data['schoolName'],
+          'userId': data['userId'],
+          'userName': data['userName'],
+          'userRole': data['userRole'],
+          'ipAddress': data['ipAddress'],
+          'details': data['details'],
+        };
+      }).toList();
+      
       _filteredLogs = _logs;
       print('✅ ${_logs.length} logs chargés depuis Firestore');
       
-      // Ajouter un log pour la consultation
       await _addLog(
         action: 'Consultation logs',
         actionType: 'consultation',
@@ -161,7 +169,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     }
   }
 
-  /// 🔥 Ajouter un log (appelé par les autres services)
   Future<void> _addLog({
     required String action,
     required String actionType,
@@ -191,7 +198,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     }
   }
 
-  /// 🔥 Compter les utilisateurs connectés par école
   Map<String, int> _getConnectedUsersBySchool() {
     final Map<String, int> countBySchool = {};
     
@@ -203,14 +209,13 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
     return countBySchool;
   }
 
-  /// 🔥 Compter les connexions par heure
   Map<String, int> _getConnectionsByHour() {
     final Map<String, int> countByHour = {};
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     
     for (var log in _logs) {
-      if (log['actionType'] == 'connexion' && log['timestamp'] is DateTime) {
+      if (log['actionType'] == 'connexion') {
         final timestamp = log['timestamp'] as DateTime;
         if (timestamp.isAfter(today)) {
           final hour = '${timestamp.hour.toString().padLeft(2, '0')}:00';
@@ -347,7 +352,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Liste des utilisateurs connectés par école
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -382,7 +386,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                   
                   const Divider(height: 24),
                   
-                  // Graphique des connexions par heure
                   Row(
                     children: [
                       Container(
@@ -426,7 +429,7 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                                 ),
                               const SizedBox(height: 4),
                               Container(
-                                height: height.clamp(4.0, 80.0).toDouble(),                                
+                                height: height.clamp(4.0, 80.0).toDouble(),
                                 width: 30,
                                 decoration: BoxDecoration(
                                   color: count > 0 ? Colors.orange : Colors.grey[200],
@@ -455,7 +458,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Filtres par niveau
                   Wrap(
                     spacing: 8,
                     children: [
@@ -467,7 +469,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Filtres par type d'action
                   Wrap(
                     spacing: 8,
                     children: [
@@ -479,7 +480,6 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Filtre par école
                   DropdownButtonFormField<String>(
                     value: _selectedSchoolFilter,
                     decoration: InputDecoration(
@@ -559,6 +559,7 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                           final log = _logs[index];
                           final levelColor = _getLevelColor(log['level']);
                           final actionColor = _getActionColor(log['actionType']);
+                          final timestamp = log['timestamp'] as DateTime? ?? DateTime.now();
                           
                           return FadeTransition(
                             opacity: _animationController,
@@ -625,13 +626,13 @@ class _SystemLogsScreenState extends State<SystemLogsScreen> with SingleTickerPr
                                       spacing: 12,
                                       runSpacing: 4,
                                       children: [
-                                        _buildInfoChip(Icons.access_time, _formatDate(log['timestamp']), Colors.grey),
-                                        if (log['userName'] != null && log['userName'].isNotEmpty)
-                                          _buildInfoChip(Icons.person, log['userName'], Colors.blue),
-                                        if (log['userRole'] != null && log['userRole'].isNotEmpty)
-                                          _buildInfoChip(Icons.work, log['userRole'], Colors.purple),
-                                        if (log['schoolName'] != null && log['schoolName'].isNotEmpty)
-                                          _buildInfoChip(Icons.business, log['schoolName'], Colors.green),
+                                        _buildInfoChip(Icons.access_time, _formatDate(timestamp), Colors.grey),
+                                        if (log['userName'] != null && log['userName'].toString().isNotEmpty)
+                                          _buildInfoChip(Icons.person, log['userName'].toString(), Colors.blue),
+                                        if (log['userRole'] != null && log['userRole'].toString().isNotEmpty)
+                                          _buildInfoChip(Icons.work, log['userRole'].toString(), Colors.purple),
+                                        if (log['schoolName'] != null && log['schoolName'].toString().isNotEmpty)
+                                          _buildInfoChip(Icons.business, log['schoolName'].toString(), Colors.green),
                                       ],
                                     ),
                                   ],

@@ -95,6 +95,36 @@ class _StaffAnnouncementsScreenState extends State<StaffAnnouncementsScreen> {
     }
   }
 
+  /// 🔥 Fonction utilitaire pour convertir la date
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    
+    // Si c'est déjà un Timestamp
+    if (dateValue is Timestamp) {
+      return dateValue.toDate();
+    }
+    
+    // Si c'est une chaîne de caractères
+    if (dateValue is String) {
+      try {
+        // Essayer de parser la date ISO
+        return DateTime.parse(dateValue);
+      } catch (e) {
+        // Si le parsing échoue, retourner la date actuelle
+        print('⚠️ Erreur parsing date: $dateValue');
+        return DateTime.now();
+      }
+    }
+    
+    // Si c'est un DateTime
+    if (dateValue is DateTime) {
+      return dateValue;
+    }
+    
+    // Fallback
+    return DateTime.now();
+  }
+
   Future<void> _loadAnnouncements() async {
     setState(() => _isLoading = true);
     
@@ -120,15 +150,13 @@ class _StaffAnnouncementsScreenState extends State<StaffAnnouncementsScreen> {
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         
-        // Créer l'objet annonce
+        // ✅ Correction ici : utiliser _parseDate au lieu de (data['date'] as Timestamp)
         final announcement = {
           'id': doc.id,
           'firestoreId': doc.id,
           'title': data['title'] ?? '',
           'content': data['content'] ?? '',
-          'date': data['date'] != null 
-              ? (data['date'] as Timestamp).toDate()
-              : DateTime.now(),
+          'date': _parseDate(data['date']),
           'audience': data['audience'] ?? 'all',
           'targetedRoles': List<String>.from(data['targetedRoles'] ?? []),
           'classId': data['classId'],
@@ -136,6 +164,7 @@ class _StaffAnnouncementsScreenState extends State<StaffAnnouncementsScreen> {
           'audienceLabel': data['audienceLabel'] ?? '',
           'createdByName': data['createdByName'] ?? 'Admin',
           'schoolId': data['schoolId'],
+          'pinned': data['pinned'] ?? false,
         };
         
         // Vérifier si l'utilisateur peut voir cette annonce

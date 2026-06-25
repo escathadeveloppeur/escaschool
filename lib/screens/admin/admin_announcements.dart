@@ -64,6 +64,33 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
     super.dispose();
   }
 
+  /// 🔥 Fonction utilitaire pour convertir la date
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    
+    // Si c'est déjà un Timestamp
+    if (dateValue is Timestamp) {
+      return dateValue.toDate();
+    }
+    
+    // Si c'est une chaîne de caractères
+    if (dateValue is String) {
+      try {
+        return DateTime.parse(dateValue);
+      } catch (e) {
+        print('⚠️ Erreur parsing date: $dateValue');
+        return DateTime.now();
+      }
+    }
+    
+    // Si c'est un DateTime
+    if (dateValue is DateTime) {
+      return dateValue;
+    }
+    
+    return DateTime.now();
+  }
+
   bool _canSeeAnnouncement(Map<String, dynamic> announcement, User? user) {
     if (user == null) return false;
     
@@ -135,14 +162,15 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
         final audienceLabel = data['audienceLabel'] ?? _getAudienceLabel(audience);
         final audienceDescription = data['audienceDescription'] ?? _getAudienceDescription(audience);
         
+        // ✅ Correction: utiliser _parseDate au lieu de (data['date'] as Timestamp)
+        final date = _parseDate(data['date']);
+        
         final announcement = {
           'id': doc.id,
           'firestoreId': doc.id,
           'title': data['title'] ?? '',
           'content': data['content'] ?? '',
-          'date': data['date'] != null 
-              ? (data['date'] as Timestamp).toDate().toIso8601String()
-              : DateTime.now().toIso8601String(),
+          'date': date.toIso8601String(),
           'schoolId': data['schoolId'],
           'createdBy': data['createdBy'],
           'createdByName': data['createdByName'] ?? 'Admin',
@@ -182,15 +210,11 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
       
       print('🔍 Chargement des justifications...');
       
-      // ✅ Récupérer TOUTES les absences où reason n'est pas null et non vide
-      // et où justifiedBy = 'parent' (ou sans ce filtre si le champ n'existe pas)
       Query query = FirebaseFirestore.instance
           .collection('attendances')
           .where('status', isEqualTo: 'absent');
       
-      // Filtrer par école si nécessaire
       if (!auth.isSuperAdmin && schoolId != null) {
-        // Récupérer les étudiants de l'école
         final studentsSnapshot = await FirebaseFirestore.instance
             .collection('students')
             .where('schoolId', isEqualTo: schoolId)
@@ -218,15 +242,12 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         
-        // ✅ Récupérer la raison (reason)
         final reason = data['reason'] as String?;
         final justifiedBy = data['justifiedBy'] as String?;
         final justifiedAt = data['justifiedAt'];
         
-        // ✅ On garde UNIQUEMENT les absences qui ont une raison (justifiées)
-        // et qui ont été justifiées par un parent
         if (reason != null && reason.isNotEmpty && justifiedBy == 'parent') {
-          // Gérer la date
+          // ✅ Correction: utiliser _parseDate pour la date
           DateTime date;
           if (data['date'] is Timestamp) {
             date = (data['date'] as Timestamp).toDate();
@@ -240,7 +261,7 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
             date = DateTime.now();
           }
           
-          // Gérer justifiedAt
+          // ✅ Correction: utiliser _parseDate pour justifiedAt
           DateTime justifiedDate;
           if (justifiedAt is Timestamp) {
             justifiedDate = justifiedAt.toDate();
@@ -259,7 +280,7 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
             'studentName': data['studentName'] ?? '',
             'className': data['className'] ?? '',
             'date': date,
-            'reason': reason, // ✅ La raison remplie par le parent
+            'reason': reason,
             'justifiedAt': justifiedDate,
             'justifiedBy': justifiedBy ?? 'parent',
             'status': data['status'] ?? 'absent',
@@ -269,7 +290,6 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
         }
       }
       
-      // Trier par date de justification (plus récent d'abord)
       loadedJustifications.sort((a, b) {
         final dateA = a['justifiedAt'] as DateTime;
         final dateB = b['justifiedAt'] as DateTime;
@@ -315,7 +335,6 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
     return descriptions[audience] ?? 'Visible par tous';
   }
 
-  /// ✅ Marquer une justification comme traitée
   Future<void> _markJustificationAsProcessed(String justificationId) async {
     try {
       await FirebaseFirestore.instance
@@ -648,7 +667,6 @@ class _AdminAnnouncementsState extends State<AdminAnnouncements> {
               ],
             ),
             const SizedBox(height: 12),
-            // ✅ Afficher la raison
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(

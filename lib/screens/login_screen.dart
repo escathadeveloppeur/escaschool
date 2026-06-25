@@ -1,3 +1,5 @@
+// lib/screens/login_screen.dart
+
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -56,6 +58,33 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
+  /// ✅ Vérifier si une école est active
+  Future<bool> _isSchoolActive(String? schoolId) async {
+    if (schoolId == null || schoolId.isEmpty) return true;
+    
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .get();
+      
+      if (!doc.exists) return false;
+      
+      final data = doc.data();
+      final isActive = data?['isActive'] ?? true;
+      final statut = data?['statut'] ?? 'Actif';
+      
+      print('🏫 Vérification école: $schoolId');
+      print('   → isActive: $isActive');
+      print('   → statut: $statut');
+      
+      return isActive;
+    } catch (e) {
+      print('❌ Erreur vérification école: $e');
+      return true; // En cas d'erreur, on autorise la connexion
+    }
+  }
+
   Future<void> _submit() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     
@@ -82,7 +111,129 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
     
     final user = auth.user!;
+    
+    // ✅ Vérifier le statut de l'école avant de rediriger
+    final isSchoolActive = await _isSchoolActive(user.schoolId);
+    
+    if (!isSchoolActive) {
+      _showSchoolSuspendedDialog(user);
+      return;
+    }
+    
     await _redirect(user);
+  }
+
+  /// ✅ Afficher le dialogue d'école suspendue
+  void _showSchoolSuspendedDialog(User user) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.block_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text('École suspendue', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.business_rounded, size: 16, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text(
+                        '🚫 École suspendue',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cette école est actuellement suspendue.\nVous ne pouvez pas accéder à vos données.',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Text(
+                    user.name,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.email, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Text(
+                    user.email,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Déconnecter l'utilisateur
+await Provider.of<AuthProvider>(context, listen: false).logout();              // Revenir sur l'écran de connexion
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              }
+            },
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Se déconnecter'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAccountNotFoundDialog() {
@@ -248,12 +399,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Logo et titre - AVEC IMAGE
+                  // Logo et titre
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       children: [
-                        // LOGO PERSONNALISÉ
                         Container(
                           width: 100,
                           height: 100,

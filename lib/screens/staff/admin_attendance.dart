@@ -86,8 +86,10 @@ class _AdminAttendanceState extends State<AdminAttendance> {
           level: data['level'] ?? '',
           year: data['year'] ?? '',
           cycleType: data['cycleType'] ?? 'primaire',
-          subjects: List<Map<String, dynamic>>.from(data['subjects'] ?? []),
-          schoolId: data['schoolId']?.toString(),  // 🔥 CORRIGÉ: String
+          subjects: data['subjects'] != null 
+              ? List<Map<String, dynamic>>.from(data['subjects']) 
+              : [],
+          schoolId: data['schoolId']?.toString() ?? '',
           sectionId: data['sectionId'] as String?,
           section: data['section'] as String?,
         );
@@ -138,11 +140,17 @@ class _AdminAttendanceState extends State<AdminAttendance> {
           address: data['address'] ?? '',
           documentsVerified: data['documentsVerified'] ?? false,
           userId: data['userId'] as int?,
+          classHiveKey: data['classHiveKey'] as int?,
+          HiveKey: data['HiveKey'] as int?,
+          parentUserId: data['parentUserId'] as int?,
+          parentRelation: data['parentRelation'],
+          schoolId: data['schoolId']?.toString(),
           classCycleType: data['classCycleType'] ?? 'primaire',
           sectionId: data['sectionId'],
           sectionName: data['sectionName'],
           classFirestoreId: data['classFirestoreId'],
-          schoolId: data['schoolId']?.toString(),  // 🔥 CORRIGÉ: String
+          classLevel: data['classLevel'],
+          classYear: data['classYear'],
         );
       }).toList();
       
@@ -179,7 +187,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
       print('📥 Chargement des présences...');
       Query query = FirebaseFirestore.instance.collection('attendances');
       
-      if (schoolId != null) {
+      if (schoolId != null && schoolId.isNotEmpty) {
         query = query.where('schoolId', isEqualTo: schoolId);
       }
       
@@ -356,7 +364,9 @@ class _AdminAttendanceState extends State<AdminAttendance> {
                   _selectedCycle = cycle['id'];
                   _selectedSectionId = null;
                   _filterClasses();
-                  _loadAttendancesFromFirestore(null);
+                  _loadAttendancesFromFirestore(
+                    Provider.of<AuthProvider>(context, listen: false).currentSchoolId
+                  );
                 });
               },
               child: Container(
@@ -520,7 +530,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
                         selectedClassId = value!;
                         final selected = filteredClasses.firstWhere((c) => c.firestoreId == selectedClassId);
                         selectedClassName = selected.className;
-                        _loadAttendancesFromFirestore(null);
+                        _loadAttendancesFromFirestore(auth.currentSchoolId);
                       });
                     },
                     decoration: const InputDecoration(
@@ -581,7 +591,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
                         if (date != null) {
                           setState(() {
                             selectedDate = date;
-                            _loadAttendancesFromFirestore(null);
+                            _loadAttendancesFromFirestore(auth.currentSchoolId);
                           });
                         }
                       },
@@ -611,7 +621,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
                             onChanged: (value) {
                               setState(() {
                                 selectedMonth = value!;
-                                _loadAttendancesFromFirestore(null);
+                                _loadAttendancesFromFirestore(auth.currentSchoolId);
                               });
                             },
                             decoration: const InputDecoration(
@@ -641,7 +651,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
                             onChanged: (value) {
                               setState(() {
                                 selectedYear = value!;
-                                _loadAttendancesFromFirestore(null);
+                                _loadAttendancesFromFirestore(auth.currentSchoolId);
                               });
                             },
                             decoration: const InputDecoration(
@@ -739,7 +749,19 @@ class _AdminAttendanceState extends State<AdminAttendance> {
             motherName: '',
             parentPhone: '',
             address: '',
-            schoolId: '',
+            documentsVerified: false,
+            userId: null,
+            classHiveKey: null,
+            HiveKey: null,
+            parentUserId: null,
+            parentRelation: null,
+            schoolId: null,
+            classCycleType: 'primaire',
+            sectionId: null,
+            sectionName: null,
+            classFirestoreId: null,
+            classLevel: null,
+            classYear: null,
           ),
         );
         final isSecondary = (student.classCycleType ?? 'primaire') == 'secondaire';
@@ -805,7 +827,7 @@ class _AdminAttendanceState extends State<AdminAttendance> {
           child: ExpansionTile(
             leading: CircleAvatar(
               backgroundColor: rate >= 80 ? Colors.green : rate >= 60 ? Colors.orange : Colors.red,
-              child: Text(student.fullName[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+              child: Text(student.fullName.isNotEmpty ? student.fullName[0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
             ),
             title: Text(student.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Column(

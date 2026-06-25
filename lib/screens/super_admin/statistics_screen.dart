@@ -103,14 +103,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
           .count()
           .get();
       
-      // Calculer le CA total (à adapter selon votre structure)
+      // Calculer le CA total
       final revenueSnapshot = await FirebaseFirestore.instance
           .collection('payments')
           .get();
       
       double totalRevenue = 0;
       for (var doc in revenueSnapshot.docs) {
-        totalRevenue += (doc.data()['amount'] as num?)?.toDouble() ?? 0;
+        final data = doc.data() as Map<String, dynamic>;
+        totalRevenue += (data['amount'] as num?)?.toDouble() ?? 0;
       }
       
       _globalStats = {
@@ -142,6 +143,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final screenWidth = MediaQuery.of(context).size.width;
     
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -165,6 +167,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -180,12 +183,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
                         children: [
                           const Icon(Icons.business, size: 18, color: Color(0xFF3B82F6)),
                           const SizedBox(width: 8),
-                          Text(
-                            auth.schoolName ?? 'Statistiques globales',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF3B82F6),
+                          Expanded(
+                            child: Text(
+                              auth.schoolName ?? 'Statistiques globales',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF3B82F6),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ),
                         ],
@@ -229,57 +236,69 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
 
                   const SizedBox(height: 24),
 
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    childAspectRatio: 1.2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    children: [
-                      _buildStatCard(
-                        'Écoles',
-                        '${_globalStats['totalSchools'] ?? 0}',
-                        Icons.business,
-                        const Color(0xFF3B82F6),
-                        '${_globalStats['activeSchools'] ?? 0} actives • ${_globalStats['suspendedSchools'] ?? 0} suspendues',
-                      ),
-                      _buildStatCard(
-                        'Utilisateurs',
-                        '${_globalStats['totalUsers'] ?? 0}',
-                        Icons.people,
-                        const Color(0xFF10B981),
-                        'Total inscrits',
-                      ),
-                      _buildStatCard(
-                        'Élèves',
-                        '${_globalStats['totalStudents'] ?? 0}',
-                        Icons.school,
-                        const Color(0xFF8B5CF6),
-                        'Étudiants inscrits',
-                      ),
-                      _buildStatCard(
-                        'Documents',
-                        '${_globalStats['totalDocuments'] ?? 0}',
-                        Icons.folder,
-                        const Color(0xFFF59E0B),
-                        'Documents en ligne',
-                      ),
-                      _buildStatCard(
-                        'Paiements',
-                        '${_globalStats['totalPayments'] ?? 0}',
-                        Icons.payment,
-                        const Color(0xFFEF4444),
-                        'Transactions',
-                      ),
-                      _buildStatCard(
-                        'CA Total',
-                        '${(_globalStats['totalRevenue'] ?? 0.0).toStringAsFixed(0)} FCFA',
-                        Icons.trending_up,
-                        const Color(0xFF14B8A6),
-                        'Chiffre d\'affaires',
-                      ),
-                    ],
+                  // ✅ Correction : Grille avec contraintes explicites
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = screenWidth > 600 ? 3 : 2;
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio: 1.2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: 6,
+                        itemBuilder: (context, index) {
+                          final cards = [
+                            _buildStatCard(
+                              'Écoles',
+                              '${_globalStats['totalSchools'] ?? 0}',
+                              Icons.business,
+                              const Color(0xFF3B82F6),
+                              '${_globalStats['activeSchools'] ?? 0} actives',
+                            ),
+                            _buildStatCard(
+                              'Utilisateurs',
+                              '${_globalStats['totalUsers'] ?? 0}',
+                              Icons.people,
+                              const Color(0xFF10B981),
+                              'Total inscrits',
+                            ),
+                            _buildStatCard(
+                              'Élèves',
+                              '${_globalStats['totalStudents'] ?? 0}',
+                              Icons.school,
+                              const Color(0xFF8B5CF6),
+                              'Étudiants inscrits',
+                            ),
+                            _buildStatCard(
+                              'Documents',
+                              '${_globalStats['totalDocuments'] ?? 0}',
+                              Icons.folder,
+                              const Color(0xFFF59E0B),
+                              'Documents en ligne',
+                            ),
+                            _buildStatCard(
+                              'Paiements',
+                              '${_globalStats['totalPayments'] ?? 0}',
+                              Icons.payment,
+                              const Color(0xFFEF4444),
+                              'Transactions',
+                            ),
+                            _buildStatCard(
+                              'CA Total',
+                              '${(_globalStats['totalRevenue'] ?? 0.0).toStringAsFixed(0)} FCFA',
+                              Icons.trending_up,
+                              const Color(0xFF14B8A6),
+                              'Chiffre d\'affaires',
+                            ),
+                          ];
+                          return cards[index];
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -308,23 +327,27 @@ class _StatisticsScreenState extends State<StatisticsScreen> with SingleTickerPr
             Text(
               value,
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
             const SizedBox(height: 4),
             Text(
               title,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
