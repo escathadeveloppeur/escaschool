@@ -110,7 +110,7 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
     totalUsers = users.length;
     totalStudents = users.where((u) => u['role'] == 'student').length;
     totalTeachers = users.where((u) => u['role'] == 'teacher').length;
-    totalAdmins = users.where((u) => u['role'] == 'admin' || u['role'] == 'super_admin').length;
+    totalAdmins = users.where((u) => u['role'] == 'admin').length;
     totalPending = users.where((u) => u['status'] == 'pending' || u['status'] == 'pending_super_admin').length;
   }
 
@@ -354,7 +354,6 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
                   {'value': 'parent', 'label': 'Parent'},
                   {'value': 'staff', 'label': 'Personnel'},
                   {'value': 'admin', 'label': 'Administrateur'},
-                  {'value': 'super_admin', 'label': 'Super Admin'},
                 ],
                 label: "Rôle",
                 icon: Icons.assignment_ind_rounded,

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/university/etablissement_model.dart';
 import 'db_helper.dart';
+import 'class_service.dart'; // ← Ajouté pour les sous-collections
 
 class SchoolService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -151,6 +152,92 @@ class SchoolService {
     }
   }
 
+  /// Récupérer une école par son ID Firestore
+  Future<EtablissementModel?> getSchoolById(String firestoreId) async {
+    try {
+      final doc = await _firestore.collection('schools').doc(firestoreId).get();
+      
+      if (!doc.exists) {
+        print('⚠️ École non trouvée: $firestoreId');
+        return null;
+      }
+      
+      final data = doc.data()!;
+      return EtablissementModel(
+        id: _getIntValue(data, 'localId'),
+        nom: _getStringValue(data, 'name'),
+        type: _getStringValue(data, 'type'),
+        adresse: _getStringValue(data, 'address'),
+        telephone: _getStringValue(data, 'phone'),
+        email: _getStringValue(data, 'email'),
+        siteWeb: _getStringValue(data, 'website'),
+        firestoreId: doc.id,
+        createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+        isActive: _getBoolValue(data, 'isActive'),
+        schoolCode: _getStringValue(data, 'schoolCode'),
+      );
+      
+    } catch (e) {
+      print('❌ Erreur récupération école: $e');
+      return null;
+    }
+  }
+
+  /// Écouter les écoles en temps réel
+  Stream<List<EtablissementModel>> listenToSchools() {
+    return _firestore
+        .collection('schools')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            return EtablissementModel(
+              id: _getIntValue(data, 'localId'),
+              nom: _getStringValue(data, 'name'),
+              type: _getStringValue(data, 'type'),
+              adresse: _getStringValue(data, 'address'),
+              telephone: _getStringValue(data, 'phone'),
+              email: _getStringValue(data, 'email'),
+              siteWeb: _getStringValue(data, 'website'),
+              firestoreId: doc.id,
+              createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+              isActive: _getBoolValue(data, 'isActive'),
+              schoolCode: _getStringValue(data, 'schoolCode'),
+            );
+          }).toList();
+        });
+  }
+
+  /// Écouter les écoles actives uniquement
+  Stream<List<EtablissementModel>> listenToActiveSchools() {
+    return _firestore
+        .collection('schools')
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            return EtablissementModel(
+              id: _getIntValue(data, 'localId'),
+              nom: _getStringValue(data, 'name'),
+              type: _getStringValue(data, 'type'),
+              adresse: _getStringValue(data, 'address'),
+              telephone: _getStringValue(data, 'phone'),
+              email: _getStringValue(data, 'email'),
+              siteWeb: _getStringValue(data, 'website'),
+              firestoreId: doc.id,
+              createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+              isActive: _getBoolValue(data, 'isActive'),
+              schoolCode: _getStringValue(data, 'schoolCode'),
+            );
+          }).toList();
+        });
+  }
+
+  // ==================== SYNCHRONISATION ====================
+
   /// Synchroniser toutes les écoles locales vers Firestore
   Future<void> syncAllSchoolsToFirestore() async {
     try {
@@ -173,7 +260,8 @@ class SchoolService {
             
             if (firestoreData['name'] != school.nom ||
                 firestoreData['address'] != school.adresse ||
-                firestoreData['isActive'] != school.isActive) {
+                firestoreData['isActive'] != school.isActive ||
+                firestoreData['schoolCode'] != school.schoolCode) {
               await updateSchool(firestoreId, school);
               print('  🔄 École mise à jour: ${school.nom}');
             }
@@ -222,14 +310,334 @@ class SchoolService {
     }
   }
 
-  /// Supprimer une école de Firestore
-  Future<void> deleteSchool(String firestoreId) async {
+  /// Synchronisation complète (bidirectionnelle)
+  Future<void> syncAllData() async {
     try {
-      await _firestore.collection('schools').doc(firestoreId).delete();
-      print('🗑️ École supprimée de Firestore: $firestoreId');
+      print('🔄 Synchronisation complète des données...');
+      await syncAllSchoolsToFirestore();
+      await syncSchoolsFromFirestoreToLocal();
+      print('✅ Synchronisation complète terminée');
     } catch (e) {
-      print('❌ Erreur suppression école Firestore: $e');
+      print('❌ Erreur synchronisation complète: $e');
       throw e;
     }
   }
+
+  // ==================== GESTION DES SOUS-COLLECTIONS ====================
+
+  /// 🆕 Supprimer une école et TOUTES ses sous-collections (classes, étudiants, etc.)
+  Future<void> deleteSchoolWithAllData(String schoolId) async {
+    try {
+      print('🗑️ Suppression de l\'école avec toutes ses données: $schoolId');
+      
+      // 1. Supprimer toutes les classes (et leurs sous-collections)
+      final classService = ClassService();
+      await classService.deleteAllClasses(schoolId);
+      
+      // 2. Supprimer toutes les sous-collections (professeurs, etc.)
+      await _deleteAllSubcollections(schoolId);
+      
+      // 3. Supprimer le document de l'école
+      await _firestore.collection('schools').doc(schoolId).delete();
+      
+      print('✅ École et toutes ses données supprimées: $schoolId');
+      
+    } catch (e) {
+      print('❌ Erreur suppression école avec données: $e');
+      throw e;
+    }
+  }
+
+  /// Supprimer toutes les sous-collections d'une école
+  Future<void> _deleteAllSubcollections(String schoolId) async {
+    try {
+      // Liste des sous-collections à supprimer
+      final subcollections = ['classes', 'professeurs', 'matieres', 'events'];
+      
+      for (var subcol in subcollections) {
+        try {
+          final snapshot = await _firestore
+              .collection('schools')
+              .doc(schoolId)
+              .collection(subcol)
+              .get();
+          
+          for (var doc in snapshot.docs) {
+            await doc.reference.delete();
+          }
+          
+          if (snapshot.docs.isNotEmpty) {
+            print('  ✅ Sous-collection $subcol supprimée (${snapshot.docs.length} documents)');
+          }
+        } catch (e) {
+          // Ignorer si la sous-collection n'existe pas
+          print('  ⚠️ Sous-collection $subcol non trouvée ou déjà supprimée');
+        }
+      }
+      
+    } catch (e) {
+      print('❌ Erreur suppression sous-collections: $e');
+      throw e;
+    }
+  }
+
+  /// 🆕 Compter le nombre de classes dans une école
+  Future<int> getClassCount(String schoolId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .count()
+          .get();
+      
+      return snapshot.count ?? 0;
+      
+    } catch (e) {
+      print('❌ Erreur comptage classes: $e');
+      return 0;
+    }
+  }
+
+  /// 🆕 Compter le nombre total d'étudiants dans une école (toutes classes confondues)
+  Future<int> getTotalStudentsCount(String schoolId) async {
+    try {
+      int total = 0;
+      
+      // Récupérer toutes les classes
+      final classesSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .get();
+      
+      // Compter les étudiants dans chaque classe
+      for (var classDoc in classesSnapshot.docs) {
+        final studentsCount = await _firestore
+            .collection('schools')
+            .doc(schoolId)
+            .collection('classes')
+            .doc(classDoc.id)
+            .collection('students')
+            .count()
+            .get();
+        
+        total += studentsCount.count ?? 0;
+      }
+      
+      return total;
+      
+    } catch (e) {
+      print('❌ Erreur comptage étudiants: $e');
+      return 0;
+    }
+  }
+
+  /// 🆕 Vérifier si une école existe
+  Future<bool> schoolExists(String firestoreId) async {
+    try {
+      final doc = await _firestore.collection('schools').doc(firestoreId).get();
+      return doc.exists;
+    } catch (e) {
+      print('❌ Erreur vérification école: $e');
+      return false;
+    }
+  }
+
+  /// 🆕 Récupérer les statistiques d'une école
+  Future<Map<String, dynamic>> getSchoolStats(String schoolId) async {
+    try {
+      final classCount = await getClassCount(schoolId);
+      final studentCount = await getTotalStudentsCount(schoolId);
+      final school = await getSchoolById(schoolId);
+      
+      return {
+        'schoolId': schoolId,
+        'schoolName': school?.nom ?? 'Inconnu',
+        'classCount': classCount,
+        'studentCount': studentCount,
+        'isActive': school?.isActive ?? false,
+        'createdAt': school?.createdAt,
+      };
+      
+    } catch (e) {
+      print('❌ Erreur récupération statistiques: $e');
+      return {};
+    }
+  }
+
+  /// 🆕 Écouter les statistiques d'une école en temps réel
+  Stream<Map<String, dynamic>> listenToSchoolStats(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .snapshots()
+        .asyncMap((doc) async {
+          if (!doc.exists) return {};
+          
+          final data = doc.data()!;
+          final classCount = await getClassCount(schoolId);
+          final studentCount = await getTotalStudentsCount(schoolId);
+          
+          return {
+            'schoolId': schoolId,
+            'schoolName': data['name'] ?? 'Inconnu',
+            'classCount': classCount,
+            'studentCount': studentCount,
+            'isActive': data['isActive'] ?? false,
+            'createdAt': data['createdAt'],
+          };
+        });
+  }
+
+  // ==================== MÉTHODES DE RECHERCHE ====================
+
+  /// Rechercher des écoles par nom
+  Future<List<EtablissementModel>> searchSchools(String query) async {
+    try {
+      if (query.isEmpty) return [];
+      
+      final snapshot = await _firestore
+          .collection('schools')
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where('name', isLessThanOrEqualTo: query + '\uf8ff')
+          .get();
+      
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return EtablissementModel(
+          id: _getIntValue(data, 'localId'),
+          nom: _getStringValue(data, 'name'),
+          type: _getStringValue(data, 'type'),
+          adresse: _getStringValue(data, 'address'),
+          telephone: _getStringValue(data, 'phone'),
+          email: _getStringValue(data, 'email'),
+          siteWeb: _getStringValue(data, 'website'),
+          firestoreId: doc.id,
+          createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+          isActive: _getBoolValue(data, 'isActive'),
+          schoolCode: _getStringValue(data, 'schoolCode'),
+        );
+      }).toList();
+      
+    } catch (e) {
+      print('❌ Erreur recherche écoles: $e');
+      return [];
+    }
+  }
+
+  /// Rechercher une école par code
+  Future<EtablissementModel?> getSchoolByCode(String code) async {
+    try {
+      final snapshot = await _firestore
+          .collection('schools')
+          .where('schoolCode', isEqualTo: code)
+          .limit(1)
+          .get();
+      
+      if (snapshot.docs.isEmpty) return null;
+      
+      final doc = snapshot.docs.first;
+      final data = doc.data();
+      
+      return EtablissementModel(
+        id: _getIntValue(data, 'localId'),
+        nom: _getStringValue(data, 'name'),
+        type: _getStringValue(data, 'type'),
+        adresse: _getStringValue(data, 'address'),
+        telephone: _getStringValue(data, 'phone'),
+        email: _getStringValue(data, 'email'),
+        siteWeb: _getStringValue(data, 'website'),
+        firestoreId: doc.id,
+        createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+        isActive: _getBoolValue(data, 'isActive'),
+        schoolCode: _getStringValue(data, 'schoolCode'),
+      );
+      
+    } catch (e) {
+      print('❌ Erreur recherche école par code: $e');
+      return null;
+    }
+  }
+
+  // ==================== SUPPRESSION ====================
+
+  /// Supprimer une école de Firestore
+  /// Supprimer une école et TOUTES ses sous-collections (version robuste)
+Future<void> deleteSchoolWithAllDataV2(String schoolId) async {
+  try {
+    print('🗑️ Suppression complète de l\'école: $schoolId');
+    
+    // 1. Supprimer les classes et leurs étudiants
+    final classesSnapshot = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .get();
+    
+    for (var classDoc in classesSnapshot.docs) {
+      // Supprimer les étudiants
+      final studentsSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classDoc.id)
+          .collection('students')
+          .get();
+      
+      for (var studentDoc in studentsSnapshot.docs) {
+        await studentDoc.reference.delete();
+      }
+      
+      // Supprimer la classe
+      await classDoc.reference.delete();
+      print('  ✅ Classe supprimée: ${classDoc.id}');
+    }
+    
+    // 2. Supprimer les professeurs
+    final profsSnapshot = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('professeurs')
+        .get();
+    
+    for (var profDoc in profsSnapshot.docs) {
+      await profDoc.reference.delete();
+    }
+    print('  ✅ Professeurs supprimés: ${profsSnapshot.docs.length}');
+    
+    // 3. Supprimer les matières
+    final matieresSnapshot = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('matieres')
+        .get();
+    
+    for (var matiereDoc in matieresSnapshot.docs) {
+      await matiereDoc.reference.delete();
+    }
+    print('  ✅ Matières supprimées: ${matieresSnapshot.docs.length}');
+    
+    // 4. Supprimer les événements
+    final eventsSnapshot = await _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('events')
+        .get();
+    
+    for (var eventDoc in eventsSnapshot.docs) {
+      await eventDoc.reference.delete();
+    }
+    print('  ✅ Événements supprimés: ${eventsSnapshot.docs.length}');
+    
+    // 5. Supprimer le document de l'école
+    await _firestore.collection('schools').doc(schoolId).delete();
+    
+    print('✅ École supprimée avec toutes ses données: $schoolId');
+    
+  } catch (e) {
+    print('❌ Erreur suppression école: $e');
+    throw e;
+  }
+}
 }

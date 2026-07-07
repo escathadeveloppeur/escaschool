@@ -29,13 +29,21 @@ class MessageModelAdapter extends TypeAdapter<MessageModel> {
       important: fields[9] as bool,
       firestoreId: fields[10] as String?,
       replyTo: fields[11] as String?,
+      schoolFirestoreId: fields[12] as String?,
+      studentId: fields[13] as String?,
+      messageFirestoreId: fields[14] as String?,
+      localKey: fields[15] as String?,
+      schoolId: fields[16] as int?,
+      readAt: fields[17] as DateTime?,
+      senderId: fields[18] as String?,
+      recipientId: fields[19] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, MessageModel obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.senderName)
       ..writeByte(1)
@@ -59,7 +67,23 @@ class MessageModelAdapter extends TypeAdapter<MessageModel> {
       ..writeByte(10)
       ..write(obj.firestoreId)
       ..writeByte(11)
-      ..write(obj.replyTo);
+      ..write(obj.replyTo)
+      ..writeByte(12)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(13)
+      ..write(obj.studentId)
+      ..writeByte(14)
+      ..write(obj.messageFirestoreId)
+      ..writeByte(15)
+      ..write(obj.localKey)
+      ..writeByte(16)
+      ..write(obj.schoolId)
+      ..writeByte(17)
+      ..write(obj.readAt)
+      ..writeByte(18)
+      ..write(obj.senderId)
+      ..writeByte(19)
+      ..write(obj.recipientId);
   }
 
   @override

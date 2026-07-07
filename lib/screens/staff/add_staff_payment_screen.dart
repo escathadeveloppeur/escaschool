@@ -125,7 +125,7 @@ class _AddStaffPaymentScreenState extends State<AddStaffPaymentScreen> {
 
       // Ajouter le log
       await db.addLog(
-        "Ajout paiement personnel: ${widget.staff['fullName']} - $_selectedMonth $_selectedYear (${_netSalary.toStringAsFixed(0)} FCFA)",
+        "Ajout paiement personnel: ${widget.staff['fullName']} - $_selectedMonth $_selectedYear (${_netSalary.toStringAsFixed(0)} USD)",
         schoolId: int.tryParse(schoolId),
       );
 
@@ -333,7 +333,7 @@ class _AddStaffPaymentScreenState extends State<AddStaffPaymentScreen> {
                           children: [
                             const Text('Salaire de base:', style: TextStyle(fontWeight: FontWeight.w500)),
                             Text(
-                              '${baseSalary.toStringAsFixed(0)} FCFA',
+                              '${baseSalary.toStringAsFixed(0)} USD',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _AppColors.success),
                             ),
                           ],
@@ -455,7 +455,7 @@ class _AddStaffPaymentScreenState extends State<AddStaffPaymentScreen> {
                       TextFormField(
                         controller: _bonusController,
                         decoration: const InputDecoration(
-                          labelText: 'Prime (FCFA)',
+                          labelText: 'Prime (USD)',
                           hintText: '0',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.add_circle_rounded, color: _AppColors.success),
@@ -474,7 +474,7 @@ class _AddStaffPaymentScreenState extends State<AddStaffPaymentScreen> {
                       TextFormField(
                         controller: _deductionController,
                         decoration: const InputDecoration(
-                          labelText: 'Déduction (FCFA)',
+                          labelText: 'Déduction (USD)',
                           hintText: '0',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.remove_circle_rounded, color: _AppColors.danger),
@@ -628,7 +628,7 @@ class _AddStaffPaymentScreenState extends State<AddStaffPaymentScreen> {
                       ],
                     ),
                     Text(
-                      '${_netSalary.toStringAsFixed(0)} FCFA',
+                      '${_netSalary.toStringAsFixed(0)} USD',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,

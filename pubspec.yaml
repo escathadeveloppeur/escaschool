@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
- 
+  screenshot: ^3.0.0  # Version spécifique
   i_google_drive: ^1.0.0  # C'est le package qui va nous aider
   # UI & Icons
   cupertino_icons: ^1.0.8

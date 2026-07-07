@@ -253,8 +253,8 @@ class _ParentPaymentsScreenState extends State<ParentPaymentsScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildSummaryItem('Payé', '${_getTotalPaid().toStringAsFixed(0)} FCFA', Icons.payment, Colors.white70),
-                        _buildSummaryItem('En attente', '${_getTotalPending().toStringAsFixed(0)} FCFA', Icons.pending, const Color(0xFFF59E0B)),
+                        _buildSummaryItem('Payé', '${_getTotalPaid().toStringAsFixed(0)} USD', Icons.payment, Colors.white70),
+                        _buildSummaryItem('En attente', '${_getTotalPending().toStringAsFixed(0)} USD', Icons.pending, const Color(0xFFF59E0B)),
                       ],
                     ),
                   ),
@@ -316,7 +316,7 @@ class _ParentPaymentsScreenState extends State<ParentPaymentsScreen>
                                         child: Icon(isPaid ? Icons.check_circle : Icons.pending, color: isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B), size: 24),
                                       ),
                                       title: Text('$monthName ${p['year']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                                      subtitle: Text('${(p['amount'] as double).toStringAsFixed(0)} FCFA • ${p['paymentMethod']}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                                      subtitle: Text('${(p['amount'] as double).toStringAsFixed(0)} USD • ${p['paymentMethod']}', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
                                       trailing: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), 
                                         decoration: BoxDecoration(color: isPaid ? const Color(0xFF10B981).withOpacity(0.1) : const Color(0xFFF59E0B).withOpacity(0.1), borderRadius: BorderRadius.circular(20)), 

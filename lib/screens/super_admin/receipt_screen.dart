@@ -69,7 +69,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       final schoolData = schoolDoc.data() as Map<String, dynamic>?;
       
       // Préparer les données du reçu
-      final currency = data['currency'] ?? 'FCFA';
+      final currency = data['currency'] ?? 'USD';
       final currencySymbol = _getCurrencySymbol(currency);
       
       _receiptData = {
@@ -167,7 +167,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     
     final data = _receiptData!;
     final date = DateTime.now();
-    final currencySymbol = data['currencySymbol'] ?? 'FCFA';
+    final currencySymbol = data['currencySymbol'] ?? 'USD';
     final amount = data['amount'] ?? 0.0;
     
     return '''

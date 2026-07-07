@@ -44,7 +44,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int totalProfessors = 0;
   int totalStudents = 0;
   int totalUnreadMessages = 0;
-  List<String> logs = [];
+  List<Map<String, dynamic>> logs = [];
 
   @override
   void initState() {
@@ -108,7 +108,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       
       final history = await db.getAllLogs();
       setState(() {
-        logs = history.reversed.toList();
+        logs = history.reversed.toList().cast<Map<String, dynamic>>();
       });
       
       print('✅ Dashboard chargé: $totalUsers utilisateurs, $totalClasses classes');
@@ -138,7 +138,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         totalAnnouncements = announcements.length;
         totalProfessors = filteredProfessors.length;
         totalStudents = students;
-        logs = history.reversed.toList();
+        logs = history.reversed.toList().cast<Map<String, dynamic>>();
       });
     }
   }
@@ -864,130 +864,150 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     );
   }
-
-  Widget _historyPage() {
-    if (logs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _AppColors.primary.withOpacity(0.06),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.history_rounded, size: 56, color: _AppColors.primary.withOpacity(0.4)),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Aucune action pour le moment",
-              style: TextStyle(fontSize: 16, color: _AppColors.textMuted, fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Container(
+Widget _historyPage() {
+  if (logs.isEmpty) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+              color: _AppColors.primary.withOpacity(0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.history_rounded, size: 56, color: _AppColors.primary.withOpacity(0.4)),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "Aucune action pour le moment",
+            style: TextStyle(fontSize: 16, color: _AppColors.textMuted, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  return Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _AppColors.cardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.history_rounded, color: _AppColors.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Journal des actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _AppColors.textDark)),
+                      const SizedBox(height: 2),
+                      Text("Total: ${logs.length} actions", style: TextStyle(color: _AppColors.textMuted, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _clearHistory,
+                  icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+                  label: const Text("Effacer"),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFFE53935).withOpacity(0.08),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _AppColors.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.history_rounded, color: _AppColors.primary),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Journal des actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _AppColors.textDark)),
-                        const SizedBox(height: 2),
-                        Text("Total: ${logs.length} actions", style: TextStyle(color: _AppColors.textMuted, fontSize: 12.5)),
-                      ],
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _clearHistory,
-                    icon: const Icon(Icons.delete_sweep_rounded, size: 18),
-                    label: const Text("Effacer"),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFE53935),
-                      backgroundColor: const Color(0xFFE53935).withOpacity(0.08),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
+          ),
+        ),
+      ),
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          itemCount: logs.length,
+          itemBuilder: (_, i) {
+            final log = logs[i];
+            final action = log['action'] ?? '';
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _AppColors.cardBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            itemCount: logs.length,
-            itemBuilder: (_, i) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _AppColors.cardBorder),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: _getLogColor(logs[i]).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(_getLogIcon(logs[i]), size: 20, color: _getLogColor(logs[i])),
+              child: ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    // ✅ CORRECTION: Passer action (String)
+                    color: _getLogColor(action).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  title: Text(logs[i], style: TextStyle(fontSize: 13, color: _AppColors.textDark, fontWeight: FontWeight.w500)),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text("Action #${logs.length - i}", style: TextStyle(fontSize: 11, color: _AppColors.textMuted)),
+                  child: Icon(
+                    // ✅ CORRECTION: Passer action (String)
+                    _getLogIcon(action),
+                    size: 20,
+                    color: _getLogColor(action),
                   ),
                 ),
-              );
-            },
-          ),
+                title: Text(
+                  action,
+                  style: TextStyle(fontSize: 13, color: _AppColors.textDark, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        log['description'] ?? '',
+                        style: TextStyle(fontSize: 11, color: _AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 2),
+                      
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Future<void> _clearHistory() async {
     final confirm = await showDialog<bool>(
       context: context,

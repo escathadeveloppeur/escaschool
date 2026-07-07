@@ -1,11 +1,15 @@
 // lib/screens/staff/add_staff_screen.dart
 
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/db_helper.dart';
 import '../../services/staff_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/staff_model.dart';
+import '../../models/staff_card_model.dart';
+import '../../services/staff_card_service.dart';
 
 class AddStaffScreen extends StatefulWidget {
   final StaffModel? staff;
@@ -30,6 +34,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
   DateTime _selectedHireDate = DateTime.now();
   bool _isActive = true;
   bool _isLoading = false;
+  bool _isGeneratingCard = false;
 
   // Liste des postes disponibles (avec icônes)
   final List<Map<String, dynamic>> _positions = [
@@ -83,53 +88,266 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
   }
 
   Future<void> _save() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  try {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final String? schoolId = auth.currentSchoolId;
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final String? schoolId = auth.currentSchoolId;
 
-    // 🔥 Vérification que schoolId n'est pas null
-    if (schoolId == null) {
-      _showSnackBar('Erreur: École non identifiée', const Color(0xFFEF4444));
+      if (schoolId == null) {
+        _showSnackBar('Erreur: École non identifiée', const Color(0xFFEF4444));
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final staff = StaffModel(
+        fullName: _nameController.text.trim(),
+        position: _selectedPosition,
+        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+        hireDate: _selectedHireDate,
+        salary: double.tryParse(_salaryController.text) ?? 0,
+        isActive: _isActive,
+        schoolId: schoolId,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      if (widget.staff == null) {
+        // ✅ AJOUT DIRECT DANS FIRESTORE
+        final docRef = await FirebaseFirestore.instance
+            .collection('staff')
+            .add({
+          'fullName': staff.fullName,
+          'position': staff.position,
+          'phone': staff.phone,
+          'email': staff.email,
+          'address': staff.address,
+          'hireDate': staff.hireDate.toIso8601String(),
+          'salary': staff.salary,
+          'isActive': staff.isActive,
+          'schoolId': staff.schoolId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        final firestoreId = docRef.id;
+
+        // Mettre à jour le modèle avec l'ID Firestore
+        staff.firestoreId = firestoreId;
+
+        _showSnackBar('Employé ajouté avec succès', const Color(0xFF10B981));
+        
+        // ✅ Générer la carte de service
+        await _generateStaffCard(staff, firestoreId, auth);
+        
+        Navigator.pop(context, true);
+        
+      } else {
+        // ✅ MODIFICATION DANS FIRESTORE
+        staff.id = widget.staff!.id;
+        staff.firestoreId = widget.staff!.firestoreId;
+        
+        await FirebaseFirestore.instance
+            .collection('staff')
+            .doc(widget.staff!.firestoreId)
+            .update({
+          'fullName': staff.fullName,
+          'position': staff.position,
+          'phone': staff.phone,
+          'email': staff.email,
+          'address': staff.address,
+          'hireDate': staff.hireDate.toIso8601String(),
+          'salary': staff.salary,
+          'isActive': staff.isActive,
+          'schoolId': staff.schoolId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        
+        _showSnackBar('Employé modifié avec succès', const Color(0xFF10B981));
+        
+        // ✅ Régénérer la carte si demandé
+        final regenerate = await _showRegenerateCardDialog();
+        if (regenerate && staff.firestoreId != null) {
+          await _generateStaffCard(staff, staff.firestoreId!, auth);
+        }
+        
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
+    } finally {
       setState(() => _isLoading = false);
-      return;
     }
-
-    final staff = StaffModel(
-      fullName: _nameController.text.trim(),
-      position: _selectedPosition,
-      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-      hireDate: _selectedHireDate,
-      salary: double.tryParse(_salaryController.text) ?? 0,
-      isActive: _isActive,
-      schoolId: schoolId,  // 🔥 String
-    );
-
-  if (widget.staff == null) {
-  // Convertir String en int si addStaff attend int
-  final int schoolIdInt = int.tryParse(schoolId ?? '0') ?? 0;
-  await _staffService.addStaff(staff, schoolId);
-  _showSnackBar('Employé ajouté avec succès', const Color(0xFF10B981));
-} else {
-  staff.id = widget.staff!.id;
-  staff.firestoreId = widget.staff!.firestoreId;
-  final int schoolIdInt = int.tryParse(schoolId ?? '0') ?? 0;
-  await _staffService.updateStaff(widget.staff!.id!, staff, schoolId);
-  _showSnackBar('Employé modifié avec succès', const Color(0xFF10B981));
-}
-
-    Navigator.pop(context, true);
-  } catch (e) {
-    _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
-  } finally {
-    setState(() => _isLoading = false);
   }
-}
+
+  Future<bool> _showRegenerateCardDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Régénérer la carte ?'),
+        content: const Text('Voulez-vous régénérer la carte de service avec les nouvelles informations ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Non'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+            ),
+            child: const Text('Oui'),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _generateStaffCard(StaffModel staff, String firestoreId, AuthProvider auth) async {
+    setState(() => _isGeneratingCard = true);
+
+    try {
+      final cardData = StaffCardData(
+        staffId: firestoreId,
+        fullName: staff.fullName,
+        position: staff.position,
+        schoolId: staff.schoolId!,
+        schoolName: auth.schoolName ?? 'ECOLE SCHOOL',
+        phone: staff.phone,
+        email: staff.email,
+        address: staff.address,
+        salary: staff.salary,
+        hireDate: staff.hireDate,
+        isActive: staff.isActive,
+      );
+
+      final cardImage = await StaffCardService.generateStaffCard(
+        data: cardData,
+        width: 800,
+        height: 550,
+        pixelRatio: 2.0,
+      );
+
+      await StaffCardService.saveCardToDevice(cardImage, staff.fullName);
+
+      if (mounted) {
+        _showStaffCardDialog(cardImage, staff.fullName);
+      }
+    } catch (e) {
+      print('❌ Erreur génération carte: $e');
+      if (mounted) {
+        _showSnackBar('Erreur génération carte: $e', const Color(0xFFEF4444));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingCard = false);
+      }
+    }
+  }
+
+  void _showStaffCardDialog(Uint8List cardImage, String staffName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '🆔 Carte de service',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    cardImage,
+                    width: 400,
+                    height: 280,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                staffName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      label: const Text('Fermer'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _shareStaffCard(cardImage, staffName);
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text('Partager'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareStaffCard(Uint8List cardImage, String staffName) async {
+    try {
+      await StaffCardService.shareCard(cardImage, staffName);
+      if (mounted) {
+        _showSnackBar('Carte partagée avec succès', const Color(0xFF10B981));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Erreur: $e', const Color(0xFFEF4444));
+      }
+    }
+  }
+
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -157,6 +375,18 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.grey[800],
         elevation: 0,
+        actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.credit_card, color: Color(0xFF10B981)),
+              onPressed: _isGeneratingCard ? null : () {
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                final staff = widget.staff!;
+                _generateStaffCard(staff, staff.firestoreId!, auth);
+              },
+              tooltip: 'Générer la carte',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -397,19 +627,36 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _save,
+                      onPressed: _isLoading || _isGeneratingCard ? null : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF10B981),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: _isLoading
+                      child: _isLoading || _isGeneratingCard
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : Text(isEditing ? 'Modifier' : 'Ajouter'),
                     ),
                   ),
                 ],
               ),
+
+              if (_isGeneratingCard)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Génération de la carte en cours...'),
+                    ],
+                  ),
+                ),
 
               const SizedBox(height: 20),
             ],

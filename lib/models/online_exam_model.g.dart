@@ -33,13 +33,23 @@ class OnlineExamModelAdapter extends TypeAdapter<OnlineExamModel> {
           .toList(),
       status: fields[12] as String,
       createdAt: fields[13] as DateTime,
+      schoolFirestoreId: fields[14] as String?,
+      examFirestoreId: fields[15] as String?,
+      classFirestoreId: fields[16] as String?,
+      professorFirestoreId: fields[17] as String?,
+      localKey: fields[18] as String?,
+      schoolId: fields[19] as int?,
+      enrolledStudents: fields[20] as int?,
+      averageScore: fields[21] as double?,
+      isPublished: fields[22] as bool?,
+      updatedAt: fields[23] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, OnlineExamModel obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(24)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -67,7 +77,27 @@ class OnlineExamModelAdapter extends TypeAdapter<OnlineExamModel> {
       ..writeByte(12)
       ..write(obj.status)
       ..writeByte(13)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(14)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(15)
+      ..write(obj.examFirestoreId)
+      ..writeByte(16)
+      ..write(obj.classFirestoreId)
+      ..writeByte(17)
+      ..write(obj.professorFirestoreId)
+      ..writeByte(18)
+      ..write(obj.localKey)
+      ..writeByte(19)
+      ..write(obj.schoolId)
+      ..writeByte(20)
+      ..write(obj.enrolledStudents)
+      ..writeByte(21)
+      ..write(obj.averageScore)
+      ..writeByte(22)
+      ..write(obj.isPublished)
+      ..writeByte(23)
+      ..write(obj.updatedAt);
   }
 
   @override

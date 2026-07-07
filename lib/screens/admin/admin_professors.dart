@@ -348,69 +348,81 @@ class _AdminProfessorsState extends State<AdminProfessors> with SingleTickerProv
       print('❌ Erreur chargement classes: $e');
     }
   }
-
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
+Future<void> _loadData() async {
+  setState(() => _loading = true);
+  
+  try {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final schoolId = auth.currentSchoolId;
     
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final schoolId = auth.currentSchoolId;
-      
-      Query query = FirebaseFirestore.instance.collection('professors');
-      if (!auth.isSuperAdmin && schoolId != null) {
-        query = query.where('schoolId', isEqualTo: schoolId);
-      }
-      
-      final professorsSnapshot = await query.get();
-      
-      final List<Map<String, dynamic>> professorsList = [];
-      for (var doc in professorsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        professorsList.add({
-          'firestoreId': doc.id,
-          'userId': data['userId'],
-          'userEmail': data['userEmail'],
-          'fullName': data['fullName'] ?? '',
-          'phone': data['phone'] ?? '',
-          'specialty': data['specialty'] ?? '',
-          'status': data['status'] ?? 'active',
-          'schoolId': data['schoolId'],
-          'isHomeroomTeacher': data['isHomeroomTeacher'] ?? false,
-          'homeroomClassId': data['homeroomClassId'],
-          'homeroomClassName': data['homeroomClassName'],
+    // Récupérer les professeurs de cette école
+    Query query = FirebaseFirestore.instance.collection('professors');
+    if (!auth.isSuperAdmin && schoolId != null) {
+      query = query.where('schoolId', isEqualTo: schoolId);
+    }
+    
+    final professorsSnapshot = await query.get();
+    
+    final List<Map<String, dynamic>> professorsList = [];
+    for (var doc in professorsSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      professorsList.add({
+        'firestoreId': doc.id,
+        'userId': data['userId'],
+        'userEmail': data['userEmail'],
+        'fullName': data['fullName'] ?? '',
+        'phone': data['phone'] ?? '',
+        'specialty': data['specialty'] ?? '',
+        'status': data['status'] ?? 'active',
+        'schoolId': data['schoolId'],
+        'isHomeroomTeacher': data['isHomeroomTeacher'] ?? false,
+        'homeroomClassId': data['homeroomClassId'],
+        'homeroomClassName': data['homeroomClassName'],
+      });
+    }
+    
+    // 🔥 CORRECTION: Récupérer UNIQUEMENT les utilisateurs de cette école
+    Query usersQuery = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'teacher');
+    
+    // Ajouter le filtre schoolId si ce n'est pas un super admin
+    if (!auth.isSuperAdmin && schoolId != null) {
+      usersQuery = usersQuery.where('schoolId', isEqualTo: schoolId);
+    }
+    
+    final usersSnapshot = await usersQuery.get();
+    
+    final existingUserIds = professorsList.map((p) => p['userId']).toList();
+    
+    _availableUsers = [];
+    for (var doc in usersSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      // Ne pas inclure les utilisateurs déjà professeurs
+      if (!existingUserIds.contains(doc.id)) {
+        _availableUsers.add({
+          'userId': doc.id,
+          'email': data['email'] ?? '',
+          'name': data['name'] ?? '',
         });
       }
-      
-      final usersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('role', isEqualTo: 'teacher')
-          .get();
-      
-      final existingUserIds = professorsList.map((p) => p['userId']).toList();
-      
-      _availableUsers = [];
-      for (var doc in usersSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        if (!existingUserIds.contains(doc.id)) {
-          _availableUsers.add({
-            'userId': doc.id,
-            'email': data['email'] ?? '',
-            'name': data['name'] ?? '',
-          });
-        }
-      }
-      
-      setState(() {
-        _professors = professorsList;
-        _filteredProfessors = professorsList;
-        _loading = false;
-      });
-      _animationController.forward(from: 0);
-    } catch (e) {
-      print('❌ Erreur chargement: $e');
-      setState(() => _loading = false);
     }
+    
+    setState(() {
+      _professors = professorsList;
+      _filteredProfessors = professorsList;
+      _loading = false;
+    });
+    _animationController.forward(from: 0);
+    
+    print('✅ ${professorsList.length} professeurs chargés');
+    print('✅ ${_availableUsers.length} utilisateurs disponibles pour cette école');
+    
+  } catch (e) {
+    print('❌ Erreur chargement: $e');
+    setState(() => _loading = false);
   }
+}
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -752,7 +764,6 @@ class _AdminProfessorsState extends State<AdminProfessors> with SingleTickerProv
                   const SizedBox(height: 20),
                   
                   // En-tête liste
-                  _buildListHeader(),
                   
                   const SizedBox(height: 12),
                   
@@ -840,88 +851,94 @@ class _AdminProfessorsState extends State<AdminProfessors> with SingleTickerProv
     );
   }
 
-  Widget _buildForm() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _AppColors.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      _isEditing ? Icons.edit_rounded : Icons.person_add_rounded,
-                      color: const Color(0xFF10B981),
-                      size: 24,
-                    ),
+// lib/screens/admin/admin_professors.dart
+
+Widget _buildForm() {
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: _AppColors.cardBorder),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.03),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      _isEditing ? 'Modifier le professeur' : 'Ajouter un professeur',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark),
-                    ),
+                  child: Icon(
+                    _isEditing ? Icons.edit_rounded : Icons.person_add_rounded,
+                    color: const Color(0xFF10B981),
+                    size: 24,
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              
-              if (!_isEditing)
-                DropdownButtonFormField<Map<String, dynamic>>(
-                  value: _selectedUser,
-                  hint: Text('Sélectionner un compte utilisateur *', style: TextStyle(color: _AppColors.textMuted)),
-                  decoration: InputDecoration(
-                    labelText: "Compte utilisateur",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    prefixIcon: Icon(Icons.account_circle_rounded, color: const Color(0xFF10B981)),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  items: _availableUsers.map((user) {
-                    return DropdownMenuItem(
-                      value: user,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(user['name'], style: TextStyle(fontWeight: FontWeight.w600, color: _AppColors.textDark)),
-                          Text(user['email'], style: TextStyle(fontSize: 12, color: _AppColors.textMuted)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedUser = value;
-                      if (value != null && _fullNameController.text.isEmpty) {
-                        _fullNameController.text = value['name'];
-                      }
-                    });
-                  },
-                  validator: (value) => value == null ? 'Compte requis' : null,
                 ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    _isEditing ? 'Modifier le professeur' : 'Ajouter un professeur',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _AppColors.textDark),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // ✅ SECTION SÉLECTION DU COMPTE UTILISATEUR (AJOUTÉE)
+            if (!_isEditing) ...[
+              DropdownButtonFormField<Map<String, dynamic>>(
+                value: _selectedUser,
+                hint: Text(
+                  'Sélectionner un compte utilisateur *',
+                  style: TextStyle(color: _AppColors.textMuted),
+                ),
+                decoration: InputDecoration(
+                  labelText: "Compte utilisateur",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  prefixIcon: Icon(Icons.account_circle_rounded, color: const Color(0xFF10B981)),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                items: _availableUsers.map((user) {
+                  return DropdownMenuItem(
+                    value: user,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user['name'], style: TextStyle(fontWeight: FontWeight.w600, color: _AppColors.textDark)),
+                        Text(user['email'], style: TextStyle(fontSize: 12, color: _AppColors.textMuted)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedUser = value;
+                    if (value != null && _fullNameController.text.isEmpty) {
+                      _fullNameController.text = value['name'];
+                    }
+                  });
+                },
+                validator: (value) => value == null ? 'Compte requis' : null,
+              ),
               
-              if (!_isEditing && _availableUsers.isEmpty)
+              if (_availableUsers.isEmpty)
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
@@ -935,7 +952,7 @@ class _AdminProfessorsState extends State<AdminProfessors> with SingleTickerProv
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "Aucun compte enseignant disponible",
+                          "Aucun compte enseignant disponible pour cette école",
                           style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
                         ),
                       ),
@@ -943,123 +960,101 @@ class _AdminProfessorsState extends State<AdminProfessors> with SingleTickerProv
                   ),
                 ),
               
-              if (!_isEditing) const SizedBox(height: 12),
-              
-              TextFormField(
-                controller: _fullNameController,
-                decoration: InputDecoration(
-                  labelText: "Nom complet *",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  prefixIcon: Icon(Icons.badge_rounded, color: const Color(0xFF10B981)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                validator: (value) => value!.isEmpty ? 'Champ requis' : null,
-              ),
               const SizedBox(height: 12),
-              
-              TextFormField(
-                controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: "Téléphone",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  prefixIcon: Icon(Icons.phone_rounded, color: const Color(0xFF10B981)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              TextFormField(
-                controller: _specialtyController,
-                decoration: InputDecoration(
-                  labelText: "Spécialité",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  prefixIcon: Icon(Icons.science_rounded, color: const Color(0xFF10B981)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              DropdownButtonFormField<String>(
-                value: _selectedStatus,
-                items: const [
-                  DropdownMenuItem(value: 'active', child: Text('Actif')),
-                  DropdownMenuItem(value: 'inactive', child: Text('Inactif')),
-                  DropdownMenuItem(value: 'vacation', child: Text('Vacances')),
-                ],
-                onChanged: (value) => setState(() => _selectedStatus = value!),
-                decoration: InputDecoration(
-                  labelText: "Statut",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  prefixIcon: Icon(Icons.toggle_on_rounded, color: const Color(0xFF10B981)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isEditing ? _updateProfessor : _addProfessor,
-                      icon: Icon(_isEditing ? Icons.save_rounded : Icons.add_rounded),
-                      label: Text(_isEditing ? 'Modifier' : 'Ajouter'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _clearForm,
-                      icon: const Icon(Icons.clear_rounded),
-                      label: const Text('Effacer'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _AppColors.textMuted,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: _AppColors.cardBorder),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ],
-          ),
+            
+            TextFormField(
+              controller: _fullNameController,
+              decoration: InputDecoration(
+                labelText: "Nom complet *",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.badge_rounded, color: const Color(0xFF10B981)),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              validator: (value) => value!.isEmpty ? 'Champ requis' : null,
+            ),
+            const SizedBox(height: 12),
+            
+            TextFormField(
+              controller: _phoneController,
+              decoration: InputDecoration(
+                labelText: "Téléphone",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.phone_rounded, color: const Color(0xFF10B981)),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            TextFormField(
+              controller: _specialtyController,
+              decoration: InputDecoration(
+                labelText: "Spécialité",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.science_rounded, color: const Color(0xFF10B981)),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            DropdownButtonFormField<String>(
+              value: _selectedStatus,
+              items: const [
+                DropdownMenuItem(value: 'active', child: Text('Actif')),
+                DropdownMenuItem(value: 'inactive', child: Text('Inactif')),
+                DropdownMenuItem(value: 'vacation', child: Text('Vacances')),
+              ],
+              onChanged: (value) => setState(() => _selectedStatus = value!),
+              decoration: InputDecoration(
+                labelText: "Statut",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.toggle_on_rounded, color: const Color(0xFF10B981)),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+            
+            const SizedBox(height: 20),
+            
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isEditing ? _updateProfessor : _addProfessor,
+                    icon: Icon(_isEditing ? Icons.save_rounded : Icons.add_rounded),
+                    label: Text(_isEditing ? 'Modifier' : 'Ajouter'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _clearForm,
+                    icon: const Icon(Icons.clear_rounded),
+                    label: const Text('Effacer'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _AppColors.textMuted,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: _AppColors.cardBorder),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildListHeader() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _AppColors.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.people_rounded, size: 18, color: _AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            "Liste des professeurs (${_filteredProfessors.length})",
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _AppColors.textDark),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 }

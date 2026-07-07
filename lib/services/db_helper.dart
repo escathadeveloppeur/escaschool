@@ -257,15 +257,7 @@ Future<MessageModel?> getMessageByKey(String key) async {
 /// Mettre à jour le statut de lecture d'un message
 Future<void> updateMessageReadStatus(String key, bool read) async {
   try {
-    final box = await Hive.openBox<Map>('messages');
-    final data = box.get(key) as Map?;
-    
-    if (data != null) {
-      data['read'] = read;
-      data['updatedAt'] = DateTime.now().toIso8601String();
-      await box.put(key, data);
-      print('✅ Statut lecture mis à jour: $key');
-    }
+   
   } catch (e) {
     print('❌ Erreur mise à jour statut lecture: $e');
   }
@@ -273,16 +265,7 @@ Future<void> updateMessageReadStatus(String key, bool read) async {
 
 /// Marquer un message comme important
 Future<void> markMessageAsImportant(String key, bool important) async {
-  try {
-    final box = await Hive.openBox<Map>('messages');
-    final data = box.get(key) as Map?;
-    
-    if (data != null) {
-      data['important'] = important;
-      data['updatedAt'] = DateTime.now().toIso8601String();
-      await box.put(key, data);
-      print('✅ Message marqué comme ${important ? "important" : "normal"}: $key');
-    }
+  try {    
   } catch (e) {
     print('❌ Erreur marquage message: $e');
   }
@@ -451,27 +434,7 @@ Future<void> updateMessage(MessageModel message) async {
     throw e;
   }
 }
-  // ================= USERS =================
-  Future<void> _seedUsers() async {
-    final Map<String, Map<String, dynamic>> initial = {};
-    int id = 1;
-    void addUser(String name, String email, String role, String password) {
-      initial[id.toString()] = {
-        'id': id,
-        'name': name,
-        'email': email.toLowerCase().trim(),
-        'role': role,
-        'password': password.trim(),
-      };
-      id++;
-    }
-    
-    
-    addUser('SuperAdmin Test', 'super@example.com', 'super_admin', 'super123');
-    await _box.put(USERS_KEY, initial);
-    await _box.put(LAST_ID_KEY, id - 1);
-  }
-
+ 
   Map<String, Map<String, dynamic>> _getUsersMap() {
     final m = _box.get(USERS_KEY, defaultValue: {});
     return Map<String, Map<String, dynamic>>.from(
@@ -650,7 +613,53 @@ Future<void> updateAnnouncementByLocalId(dynamic localId, Map<String, dynamic> a
     throw e;
   }
 }
+// lib/services/db_helper.dart
 
+/// ✅ Récupérer un résultat d'examen par ses clés (avec int)
+Future<ExamResultModel?> getExamResultByKeys(int examId, int studentId) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final key = '${examId}_${studentId}';
+    final result = box.get(key);
+    
+    if (result != null) {
+      print('✅ Résultat trouvé pour l\'examen $examId et l\'étudiant $studentId');
+      return result;
+    } else {
+      print('ℹ️ Aucun résultat trouvé pour l\'examen $examId et l\'étudiant $studentId');
+      return null;
+    }
+  } catch (e) {
+    print('❌ Erreur récupération résultat examen: $e');
+    return null;
+  }
+}
+
+/// ✅ Ajouter un résultat d'examen
+Future<void> addExamResult(ExamResultModel result) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final key = result.localKey ?? '${result.examId}_${result.studentId}';
+    await box.put(key, result);
+    print('✅ Résultat examen ajouté: $key');
+  } catch (e) {
+    print('❌ Erreur ajout résultat examen: $e');
+    throw e;
+  }
+}
+
+/// ✅ Mettre à jour un résultat d'examen
+Future<void> updateExamResult(ExamResultModel result) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final key = result.localKey ?? '${result.examId}_${result.studentId}';
+    await box.put(key, result);
+    print('✅ Résultat examen mis à jour: $key');
+  } catch (e) {
+    print('❌ Erreur mise à jour résultat examen: $e');
+    throw e;
+  }
+}
 Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) async {
   final professors = await getAllProfessors();
   final users = await _getUsersMap();  // Assurez-vous que cette méthode est async ou adaptez
@@ -846,7 +855,6 @@ Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) asy
     final key = id.toString();
     if (!schedules.containsKey(key)) return false;
     
-    final removed = schedules.remove(key);
     await _box.put(SCHEDULES_KEY, schedules);
     
     await addLog("Horaire supprimé, clé: $id");
@@ -919,7 +927,7 @@ Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) asy
     
     if (key == null) return false;
     
-    final removed = permissions.remove(key);
+    
     await _box.put(PROFESSOR_PERMISSIONS_KEY, permissions);
     
     final professor = await getProfessor(professorId);
@@ -1583,11 +1591,18 @@ Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) asy
 
   // ================= LOGS =================
 
+// lib/services/db_helper.dart
 
-  Future<List<String>> getAllLogs() async {
-    final logs = List<String>.from(_box.get(LOGS_KEY, defaultValue: []));
-    return logs.reversed.toList();
+/// Récupérer tous les logs
+Future<List<Map<String, dynamic>>> getAllLogs() async {
+  try {
+    final box = await Hive.openBox<Map>('logs');
+    return box.values.toList().cast<Map<String, dynamic>>();
+  } catch (e) {
+    print('❌ Erreur récupération logs: $e');
+    return [];
   }
+}
 
   Future<void> clearLogs() async {
     await _box.put(LOGS_KEY, <String>[]);
@@ -1765,10 +1780,7 @@ Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) asy
     return box.values.toList();
   }
 
-  Future<void> addExamResult(ExamResultModel result) async {
-    final box = await Hive.openBox<ExamResultModel>(EXAM_RESULTS_KEY);
-    await box.add(result);
-  }
+
 
   Future<List<ExamResultModel>> getAllExamResults() async {
     final box = await Hive.openBox<ExamResultModel>(EXAM_RESULTS_KEY);
@@ -1787,12 +1799,55 @@ Future<List<Map<String, dynamic>>> getProfessorsWithDetails({int? schoolId}) asy
 
   // ================= UNIVERSITÉ =================
   // ==================== CONSTANTES POUR UNIVERSITÉ ====================
- 
+ Future<void> updateUserById(int id, Map<String, dynamic> user) async {
+  try {
+    final box = await Hive.openBox<Map>('users');
+    
+    // Chercher la clé correspondante
+    String? foundKey;
+    for (var key in box.keys) {
+      final existingUser = box.get(key) as Map<String, dynamic>;
+      if (existingUser['id'] == id) {
+        foundKey = key.toString();
+        break;
+      }
+    }
+    
+    if (foundKey != null) {
+      // Mettre à jour l'utilisateur existant
+      final updatedUser = {
+        ...user,
+        'id': id,
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await box.put(foundKey, updatedUser);
+      print('✅ Utilisateur mis à jour localement: $id');
+    } else {
+      // Si non trouvé, ajouter
+      await insertUser(user);
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour utilisateur: $e');
+    throw e;
+  }
+}
   
   // ==================== ÉTABLISSEMENTS ====================
   // Ajoutez ces méthodes dans DBHelper
 
+// lib/services/db_helper.dart
 
+/// ✅ Supprimer un étudiant par sa clé
+Future<void> deleteStudentByKey(String key) async {
+  try {
+    final box = await Hive.openBox<StudentModel>('students');
+    await box.delete(key);
+    print('🗑️ Étudiant supprimé localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression étudiant: $e');
+    throw e;
+  }
+}
 Future<GradeModel?> getGradeByKey(int? key) async {
   if (key == null) return null;
   final box = await Hive.openBox<GradeModel>('grades');
@@ -1860,6 +1915,48 @@ Future<Map<String, dynamic>?> getUserById(int id) async {
   // ==================== GESTION DU PERSONNEL ====================
 
   /// Ajouter un membre du personnel
+  /// // lib/services/db_helper.dart
+
+/// ✅ Mettre à jour un horaire par sa clé
+Future<void> updateScheduleByKey(int key, Map<String, dynamic> schedule) async {
+  try {
+    final box = await Hive.openBox<Map>('schedules');
+    final keyStr = key.toString();
+    
+    if (box.containsKey(keyStr)) {
+      await box.put(keyStr, schedule);
+      print('✅ Horaire mis à jour localement: $key');
+    } else {
+      // Si la clé n'existe pas, ajouter
+      await box.put(keyStr, schedule);
+      print('✅ Horaire ajouté localement: $key');
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour horaire: $e');
+    throw e;
+  }
+}
+
+/// ✅ Récupérer un horaire par sa clé
+
+
+
+
+/// ✅ Supprimer un horaire par sa clé
+Future<void> deleteScheduleByKey(int key) async {
+  try {
+    final box = await Hive.openBox<Map>('schedules');
+    final keyStr = key.toString();
+    await box.delete(keyStr);
+    print('🗑️ Horaire supprimé localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression horaire: $e');
+    throw e;
+  }
+}
+
+/// ✅ Récupérer tous les horaires
+
   Future<int> addStaff(StaffModel staff) async {
     try {
       final box = await Hive.openBox<StaffModel>(staffBox);
@@ -2754,31 +2851,40 @@ Future<List<ClassModel>> getClassesBySchool(String schoolId) async {
         print('❌ Erreur synchronisation classe: $e');
       }
     }
+    // lib/services/db_helper.dart
+
+/// ✅ Supprimer un étudiant par sa clé
+
+
+/// ✅ Supprimer un étudiant par sa clé Hive
+
     
     // Étudiants non synchronisés
-    final unsyncedStudents = await getUnsyncedStudents();
-    for (var student in unsyncedStudents) {
-      try {
-        await _apiService.createEtudiant({
-          'fullName': student.fullName,
-          'className': student.className,
-          'dateNaissance': student.birthDate,
-          'lieuNaissance': student.birthPlace,
-          'pere': student.fatherName,
-          'mere': student.motherName,
-          'telephoneParent': student.parentPhone,
-          'adresse': student.address,
-        });
-        await markAsSynced('student', student.key!);
-        final pushed = results['pushed'] as Map<String, dynamic>;
-pushed['success'] = (pushed['success'] as int) + 1;
-        print('✅ Étudiant synchronisé: ${student.fullName}');
-      } catch (e) {
-        final pushed = results['pushed'] as Map<String, dynamic>;
-pushed['failed'] = (pushed['failed'] as int) + 1;
-        print('❌ Erreur synchronisation étudiant: $e');
-      }
-    }
+    // lib/services/db_helper.dart
+
+/// ✅ Marquer un élément comme synchronisé (générique) - À placer AVANT son utilisation
+// lib/services/db_helper.dart
+
+/// ✅ Supprimer un étudiant par sa clé
+
+
+/// ✅ Supprimer un étudiant (alias)
+
+
+/// ✅ Supprimer un étudiant par son HiveKey
+
+
+
+/// ✅ Supprimer tous les étudiants d'une école
+
+
+
+
+
+
+
+
+
     
 // Solution correcte :
 (results['messages'] as List<String>).add('📤 PUSH terminé: ${(results['pushed'] as Map<String, dynamic>)['success']} succès, ${(results['pushed'] as Map<String, dynamic>)['failed']} échecs');
@@ -2950,5 +3056,585 @@ Future<Map<String, dynamic>?> getAdminUserForStudent(String studentName) async {
     orElse: () => {} ,
   );
 }
+// lib/services/db_helper.dart
 
+/// Mettre à jour une présence existante
+Future<void> updateAttendance(AttendanceModel attendance) async {
+  try {
+    final box = await Hive.openBox<AttendanceModel>('attendances');
+    await box.put(attendance.key, attendance);
+    print('✅ Présence mise à jour localement: ${attendance.key}');
+  } catch (e) {
+    print('❌ Erreur mise à jour présence: $e');
+    throw e;
+  }
+}
+
+/// Mettre à jour une présence par sa clé
+Future<void> updateAttendanceByKey(String key, AttendanceModel attendance) async {
+  try {
+    final box = await Hive.openBox<AttendanceModel>('attendances');
+    await box.put(key, attendance);
+    print('✅ Présence mise à jour par clé: $key');
+  } catch (e) {
+    print('❌ Erreur mise à jour présence par clé: $e');
+    throw e;
+  }
+}
+// lib/services/db_helper.dart
+
+/// Supprimer un document par sa clé
+Future<void> deleteDocumentByKey(String key) async {
+  try {
+    final box = await Hive.openBox<DocumentModel>('documents');
+    await box.delete(key);
+    print('🗑️ Document supprimé localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression document: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un document par sa clé Hive
+Future<void> deleteDocumentByKeyHive(int keyHive) async {
+  try {
+    final box = await Hive.openBox<DocumentModel>('documents');
+    // Chercher le document avec cette clé Hive
+    final keys = box.keys.where((k) {
+      final doc = box.get(k);
+      return doc?.keyHive == keyHive;
+    }).toList();
+    
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ Document(s) supprimé(s) avec keyHive: $keyHive');
+  } catch (e) {
+    print('❌ Erreur suppression document par keyHive: $e');
+    throw e;
+  }
+}
+// lib/services/db_helper.dart
+
+/// Supprimer un paiement par sa clé
+Future<void> deletePaymentByKey(String key) async {
+  try {
+    final box = await Hive.openBox<PaymentModel>('payments');
+    await box.delete(key);
+    print('🗑️ Paiement supprimé localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression paiement: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un paiement par sa clé Hive
+Future<void> deletePaymentByKeyHive(int keyHive) async {
+  try {
+    final box = await Hive.openBox<PaymentModel>('payments');
+    final keys = box.keys.where((k) {
+      final payment = box.get(k);
+      return payment?.studentKeyHive == keyHive;
+    }).toList();
+    
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ Paiement(s) supprimé(s) avec studentKeyHive: $keyHive');
+  } catch (e) {
+    print('❌ Erreur suppression paiement par keyHive: $e');
+    throw e;
+  }
+}
+// lib/services/db_helper.dart
+
+// ==================== GESTION DES PROFESSEURS ====================
+
+/// Récupérer tous les professeurs
+
+// lib/services/db_helper.dart
+
+// ==================== GESTION DES NOTES ====================
+
+/// Supprimer une note par sa clé
+Future<void> deleteGradeByKey(String key) async {
+  try {
+    final box = await Hive.openBox<GradeModel>('grades');
+    await box.delete(key);
+    print('🗑️ Note supprimée localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression note: $e');
+    throw e;
+  }
+}
+
+/// Supprimer une note par sa clé Hive
+Future<void> deleteGradeByKeyHive(int keyHive) async {
+  try {
+    final box = await Hive.openBox<GradeModel>('grades');
+    final keys = box.keys.where((k) {
+      final grade = box.get(k);
+      return grade?.studentKeyHive == keyHive;
+    }).toList();
+    
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ Note(s) supprimée(s) avec studentKeyHive: $keyHive');
+  } catch (e) {
+    print('❌ Erreur suppression note par keyHive: $e');
+    throw e;
+  }
+}
+// lib/services/db_helper.dart
+
+// ==================== GESTION DES MESSAGES ====================
+
+/// Récupérer tous les messages
+
+
+/// Récupérer un message par sa clé
+
+
+/// Récupérer les messages d'un destinataire
+Future<List<MessageModel>> getMessagesByRecipient(String recipientName) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    return box.values.where((m) => m.recipientName == recipientName).toList();
+  } catch (e) {
+    print('❌ Erreur récupération messages par destinataire: $e');
+    return [];
+  }
+}
+
+/// Récupérer les messages non lus d'un destinataire
+Future<List<MessageModel>> getUnreadMessagesByRecipient(String recipientName) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    return box.values
+        .where((m) => m.recipientName == recipientName && !m.read)
+        .toList();
+  } catch (e) {
+    print('❌ Erreur récupération messages non lus: $e');
+    return [];
+  }
+}
+
+/// Ajouter un message
+
+
+/// Mettre à jour un message
+
+/// ✅ Mettre à jour le statut de lecture d'un message
+
+
+/// ✅ Mettre à jour le statut important d'un message
+Future<void> updateMessageImportantStatus(String key, bool important) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    final message = box.get(key);
+    if (message != null) {
+      // Créer une nouvelle instance avec le statut mis à jour
+      final updatedMessage = MessageModel(
+        senderName: message.senderName,
+        senderRole: message.senderRole,
+        recipientName: message.recipientName,
+        recipientRole: message.recipientRole,
+        studentName: message.studentName,
+        subject: message.subject,
+        content: message.content,
+        date: message.date,
+        read: message.read,
+        important: important,
+        firestoreId: message.firestoreId,
+        replyTo: message.replyTo,
+        schoolFirestoreId: message.schoolFirestoreId,
+        studentId: message.studentId,
+        messageFirestoreId: message.messageFirestoreId,
+        localKey: message.localKey,
+        schoolId: message.schoolId,
+        readAt: message.readAt,
+        senderId: message.senderId,
+        recipientId: message.recipientId,
+      );
+      await box.put(key, updatedMessage);
+      print('📌 Statut important mis à jour: $key -> ${important ? "important" : "normal"}');
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour statut important: $e');
+    throw e;
+  }
+}
+
+/// ✅ Supprimer un message par sa clé
+Future<void> deleteMessageByKey(String key) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    await box.delete(key);
+    print('🗑️ Message supprimé localement: $key');
+  } catch (e) {
+    print('❌ Erreur suppression message: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un message (alias)
+
+
+/// Supprimer tous les messages d'un destinataire
+Future<void> deleteMessagesByRecipient(String recipientName) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    final keys = box.keys.where((k) {
+      final message = box.get(k);
+      return message?.recipientName == recipientName;
+    }).toList();
+    
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ Messages supprimés pour le destinataire: $recipientName');
+  } catch (e) {
+    print('❌ Erreur suppression messages par destinataire: $e');
+    throw e;
+  }
+}
+
+/// Supprimer tous les messages
+
+
+/// Compter les messages
+Future<int> countMessages() async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    return box.length;
+  } catch (e) {
+    print('❌ Erreur comptage messages: $e');
+    return 0;
+  }
+}
+
+/// Compter les messages non lus
+Future<int> countUnreadMessages() async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    return box.values.where((m) => !m.read).length;
+  } catch (e) {
+    print('❌ Erreur comptage messages non lus: $e');
+    return 0;
+  }
+}
+
+/// Compter les messages non lus par destinataire
+Future<int> countUnreadMessagesByRecipient(String recipientName) async {
+  try {
+    final box = await Hive.openBox<MessageModel>('messages');
+    return box.values
+        .where((m) => m.recipientName == recipientName && !m.read)
+        .length;
+  } catch (e) {
+    print('❌ Erreur comptage messages non lus par destinataire: $e');
+    return 0;
+  }
+}
+/// Récupérer un professeur par son ID local
+Future<Map<String, dynamic>?> getProfessorByLocalId(int localId) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    // Chercher par localId
+    for (var key in box.keys) {
+      final professor = box.get(key) as Map<String, dynamic>;
+      if (professor['id'] == localId) {
+        return professor;
+      }
+    }
+    return null;
+  } catch (e) {
+    print('❌ Erreur récupération professeur par localId: $e');
+    return null;
+  }
+}
+
+/// Récupérer un professeur par son ID Firestore
+Future<Map<String, dynamic>?> getProfessorByFirestoreId(String firestoreId) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    for (var key in box.keys) {
+      final professor = box.get(key) as Map<String, dynamic>;
+      if (professor['firestoreId'] == firestoreId) {
+        return professor;
+      }
+    }
+    return null;
+  } catch (e) {
+    print('❌ Erreur récupération professeur par firestoreId: $e');
+    return null;
+  }
+}
+
+/// Ajouter un professeur
+
+
+
+/// Mettre à jour un professeur par son ID local
+Future<void> updateProfessorByLocalId(int localId, Map<String, dynamic> professor) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    // Trouver la clé correspondante
+    String? foundKey;
+    for (var key in box.keys) {
+      final existing = box.get(key) as Map<String, dynamic>;
+      if (existing['id'] == localId) {
+        foundKey = key.toString();
+        break;
+      }
+    }
+    
+    if (foundKey != null) {
+      await box.put(foundKey, professor);
+      print('✅ Professeur mis à jour localement: ${professor['fullName']}');
+    } else {
+      // Si non trouvé, ajouter
+      await addProfessor(professor);
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour professeur: $e');
+    throw e;
+  }
+}
+// lib/services/db_helper.dart
+
+// ==================== GESTION DES RÉSULTATS D'EXAMEN ====================
+
+
+
+/// Récupérer un résultat d'examen par ses clés (examId + studentId)
+
+
+
+/// ✅ Récupérer tous les résultats d'un examen (avec int)
+Future<List<ExamResultModel>> getExamResultsByExamId(int examId) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final results = box.values.where((r) => r.examId == examId).toList();
+    print('📥 ${results.length} résultats trouvés pour l\'examen $examId');
+    return results;
+  } catch (e) {
+    print('❌ Erreur récupération résultats: $e');
+    return [];
+  }
+}
+
+/// ✅ Récupérer tous les résultats d'un étudiant (avec int)
+Future<List<ExamResultModel>> getExamResultsByStudentId(int studentId) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final results = box.values.where((r) => r.studentId == studentId).toList();
+    print('📥 ${results.length} résultats trouvés pour l\'étudiant $studentId');
+    return results;
+  } catch (e) {
+    print('❌ Erreur récupération résultats étudiant: $e');
+    return [];
+  }
+}
+
+
+
+/// ✅ Supprimer un résultat par sa clé
+Future<void> deleteExamResultByKey(String key) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    await box.delete(key);
+    print('🗑️ Résultat examen supprimé: $key');
+  } catch (e) {
+    print('❌ Erreur suppression résultat: $e');
+    throw e;
+  }
+}
+
+/// ✅ Supprimer tous les résultats d'un examen (avec int)
+Future<void> deleteExamResultsByExamId(int examId) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final keys = <String>[];
+    
+    for (var key in box.keys) {
+      final result = box.get(key);
+      if (result != null && result.examId == examId) {
+        keys.add(key.toString());
+      }
+    }
+    
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ ${keys.length} résultats supprimés pour l\'examen: $examId');
+  } catch (e) {
+    print('❌ Erreur suppression résultats par examen: $e');
+    throw e;
+  }
+}
+/// Ajouter un résultat d'examen
+
+
+// lib/services/db_helper.dart
+
+/// ✅ Mettre à jour un résultat d'examen
+
+
+
+
+/// Supprimer tous les résultats d'un étudiant
+Future<void> deleteExamResultsByStudentId(String studentId) async {
+  try {
+    final box = await Hive.openBox<ExamResultModel>('exam_results');
+    final keys = box.keys.where((key) {
+      final result = box.get(key);
+      return result?.studentId == studentId;
+    }).toList();
+    for (var key in keys) {
+      await box.delete(key);
+    }
+    print('🗑️ Résultats supprimés pour l\'étudiant: $studentId');
+  } catch (e) {
+    print('❌ Erreur suppression résultats par étudiant: $e');
+    throw e;
+  }
+}
+/// Mettre à jour un professeur par son ID Firestore
+Future<void> updateProfessorByFirestoreId(String firestoreId, Map<String, dynamic> professor) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    // Trouver la clé correspondante
+    String? foundKey;
+    for (var key in box.keys) {
+      final existing = box.get(key) as Map<String, dynamic>;
+      if (existing['firestoreId'] == firestoreId) {
+        foundKey = key.toString();
+        break;
+      }
+    }
+    
+    if (foundKey != null) {
+      await box.put(foundKey, professor);
+      print('✅ Professeur mis à jour localement: ${professor['fullName']}');
+    } else {
+      await addProfessor(professor);
+    }
+  } catch (e) {
+    print('❌ Erreur mise à jour professeur: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un professeur par son ID local
+Future<void> deleteProfessorByLocalId(int localId) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    String? foundKey;
+    for (var key in box.keys) {
+      final professor = box.get(key) as Map<String, dynamic>;
+      if (professor['id'] == localId) {
+        foundKey = key.toString();
+        break;
+      }
+    }
+    
+    if (foundKey != null) {
+      await box.delete(foundKey);
+      print('🗑️ Professeur supprimé localement: $localId');
+    }
+  } catch (e) {
+    print('❌ Erreur suppression professeur: $e');
+    throw e;
+  }
+}
+
+/// Supprimer un professeur par son ID Firestore
+Future<void> deleteProfessorByFirestoreId(String firestoreId) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    String? foundKey;
+    for (var key in box.keys) {
+      final professor = box.get(key) as Map<String, dynamic>;
+      if (professor['firestoreId'] == firestoreId) {
+        foundKey = key.toString();
+        break;
+      }
+    }
+    
+    if (foundKey != null) {
+      await box.delete(foundKey);
+      print('🗑️ Professeur supprimé localement: $firestoreId');
+    }
+  } catch (e) {
+    print('❌ Erreur suppression professeur: $e');
+    throw e;
+  }
+}
+
+/// Supprimer tous les professeurs
+Future<void> deleteAllProfessors() async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    await box.clear();
+    print('🗑️ Tous les professeurs supprimés localement');
+  } catch (e) {
+    print('❌ Erreur suppression tous les professeurs: $e');
+    throw e;
+  }
+}
+
+/// Compter les professeurs
+Future<int> countProfessors() async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    return box.length;
+  } catch (e) {
+    print('❌ Erreur comptage professeurs: $e');
+    return 0;
+  }
+}
+
+/// Récupérer les professeurs par statut
+Future<List<Map<String, dynamic>>> getProfessorsByStatus(String status) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    return box.values
+        .where((prof) => prof['status'] == status)
+        .toList()
+        .cast<Map<String, dynamic>>();
+  } catch (e) {
+    print('❌ Erreur récupération professeurs par statut: $e');
+    return [];
+  }
+}
+
+/// Récupérer les professeurs par spécialité
+Future<List<Map<String, dynamic>>> getProfessorsBySpecialty(String specialty) async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    return box.values
+        .where((prof) => prof['specialty'] == specialty)
+        .toList()
+        .cast<Map<String, dynamic>>();
+  } catch (e) {
+    print('❌ Erreur récupération professeurs par spécialité: $e');
+    return [];
+  }
+}
+
+/// Récupérer les professeurs titulaires
+Future<List<Map<String, dynamic>>> getHomeroomProfessors() async {
+  try {
+    final box = await Hive.openBox<Map>('professors');
+    return box.values
+        .where((prof) => prof['isHomeroomTeacher'] == true)
+        .toList()
+        .cast<Map<String, dynamic>>();
+  } catch (e) {
+    print('❌ Erreur récupération professeurs titulaires: $e');
+    return [];
+  }
+}
 }

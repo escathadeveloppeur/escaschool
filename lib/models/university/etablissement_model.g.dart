@@ -29,13 +29,28 @@ class EtablissementModelAdapter extends TypeAdapter<EtablissementModel> {
       updatedAt: fields[9] as DateTime?,
       isActive: fields[10] as bool,
       schoolCode: fields[11] as String,
+      pays: fields[12] as String?,
+      province: fields[13] as String?,
+      ville: fields[14] as String?,
+      commune: fields[15] as String?,
+      codePostal: fields[16] as String?,
+      statut: fields[17] as String?,
+      directeurNom: fields[18] as String?,
+      directeurEmail: fields[19] as String?,
+      directeurTelephone: fields[20] as String?,
+      anneeCreation: fields[21] as int?,
+      capacite: fields[22] as int?,
+      langueEnseignement: fields[23] as String?,
+      logoUrl: fields[24] as String?,
+      signaturePrefet: fields[25] as String?,
+      signatureChef: fields[26] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, EtablissementModel obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(27)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -59,7 +74,37 @@ class EtablissementModelAdapter extends TypeAdapter<EtablissementModel> {
       ..writeByte(10)
       ..write(obj.isActive)
       ..writeByte(11)
-      ..write(obj.schoolCode);
+      ..write(obj.schoolCode)
+      ..writeByte(12)
+      ..write(obj.pays)
+      ..writeByte(13)
+      ..write(obj.province)
+      ..writeByte(14)
+      ..write(obj.ville)
+      ..writeByte(15)
+      ..write(obj.commune)
+      ..writeByte(16)
+      ..write(obj.codePostal)
+      ..writeByte(17)
+      ..write(obj.statut)
+      ..writeByte(18)
+      ..write(obj.directeurNom)
+      ..writeByte(19)
+      ..write(obj.directeurEmail)
+      ..writeByte(20)
+      ..write(obj.directeurTelephone)
+      ..writeByte(21)
+      ..write(obj.anneeCreation)
+      ..writeByte(22)
+      ..write(obj.capacite)
+      ..writeByte(23)
+      ..write(obj.langueEnseignement)
+      ..writeByte(24)
+      ..write(obj.logoUrl)
+      ..writeByte(25)
+      ..write(obj.signaturePrefet)
+      ..writeByte(26)
+      ..write(obj.signatureChef);
   }
 
   @override

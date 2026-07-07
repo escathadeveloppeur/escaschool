@@ -14,7 +14,8 @@ import 'attendance_report.dart';
 import 'manage_staff_screen.dart';
 import 'staff_payments_screen.dart';
 import 'staff_messages_screen.dart';
-import 'staff_announcements.dart'; // ✅ NOUVEAU : Page des annonces
+import 'staff_announcements.dart';
+import 'staff_attendance_screen.dart'; // ✅ NOUVEAU : Présences personnel
 
 // ===================== PALETTE / THEME HELPERS =====================
 class _AppColors {
@@ -48,7 +49,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
   int totalParents = 0;
   int totalStaff = 0;
   int totalUnreadMessages = 0;
-  int totalAnnouncements = 0; // ✅ NOUVEAU
+  int totalAnnouncements = 0;
 
   final List<String> titles = [
     "Dashboard Personnel",
@@ -56,12 +57,13 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
     "Paiements",
     "Documents",
     "Parents",
-    "Présences",
+    "Présences Élèves",
     "Rapports",
     "Personnel",
     "Paiements Personnel",
     "Messages",
-    "Annonces",      // ✅ NOUVEAU
+    "Annonces",
+    "Présences Personnel", // ✅ NOUVEAU
     "Historique",
   ];
 
@@ -130,7 +132,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       final staffSnapshot = await staffQuery.get();
       totalStaff = staffSnapshot.docs.length;
       
-      // ✅ Annonces
+      // Annonces
       Query announcementQuery = FirebaseFirestore.instance.collection('announcements');
       if (schoolId != null && !auth.isSuperAdmin) {
         announcementQuery = announcementQuery.where('schoolId', isEqualTo: schoolId);
@@ -201,7 +203,8 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       const ManageStaffScreen(),
       StaffPaymentsScreen(staff: null),
       const StaffMessagesScreen(),
-      const StaffAnnouncementsScreen(), // ✅ NOUVEAU : Page des annonces
+      const StaffAnnouncementsScreen(),
+      const StaffAttendanceScreen(), // ✅ NOUVEAU : Présences personnel
       _historyPage(),
     ];
 
@@ -336,13 +339,14 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
           _drawerItem(Icons.payment_rounded, "Paiements", 2),
           _drawerItem(Icons.folder_open_rounded, "Documents", 3),
           _drawerItem(Icons.family_restroom_rounded, "Parents", 4),
-          _drawerItem(Icons.history_rounded, "Présences", 5),
+          _drawerItem(Icons.history_rounded, "Présences Élèves", 5),
           _drawerItem(Icons.bar_chart_rounded, "Rapports", 6),
           _drawerItem(Icons.people_rounded, "Personnel", 7),
           _drawerItem(Icons.payments_rounded, "Paiements Personnel", 8),
           _buildMessagesDrawerItem(),
-          _drawerItem(Icons.campaign_rounded, "Annonces", 10), // ✅ NOUVEAU
-          _drawerItem(Icons.history_rounded, "Historique", 11), // ✅ Index mis à jour
+          _drawerItem(Icons.campaign_rounded, "Annonces", 10),
+          _drawerItem(Icons.fingerprint, "Présences Personnel", 11, color: const Color(0xFF0F766E)), // ✅ NOUVEAU
+          _drawerItem(Icons.history_rounded, "Historique", 12),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Divider(height: 24),
@@ -429,8 +433,10 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
     );
   }
 
-  Widget _drawerItem(IconData icon, String title, int index) {
+  Widget _drawerItem(IconData icon, String title, int index, {Color? color}) {
     final bool isSelected = selectedIndex == index;
+    final iconColor = color ?? (isSelected ? _AppColors.primary : Colors.grey[700]);
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -439,7 +445,7 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
       ),
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: Icon(icon, color: isSelected ? _AppColors.primary : Colors.grey[700]),
+        leading: Icon(icon, color: iconColor),
         title: Text(
           title,
           style: TextStyle(
@@ -549,8 +555,8 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
               _statCard("Paiements", totalPayments.toString(), Icons.payment_rounded, const Color(0xFF10B981)),
               _statCard("Documents", totalDocuments.toString(), Icons.folder_open_rounded, const Color(0xFF3B82F6)),
               _statCard("Personnel", totalStaff.toString(), Icons.people_rounded, const Color(0xFF14B8A6)),
-              _statCard("Annonces", totalAnnouncements.toString(), Icons.campaign_rounded, const Color(0xFFEF4444)), // ✅ NOUVEAU
-              _statCard("Montant", "${totalAmount.toStringAsFixed(0)} FCFA", Icons.attach_money_rounded, const Color(0xFFF59E0B)),
+              _statCard("Annonces", totalAnnouncements.toString(), Icons.campaign_rounded, const Color(0xFFEF4444)),
+              _statCard("Montant", "${totalAmount.toStringAsFixed(0)} USD", Icons.attach_money_rounded, const Color(0xFFF59E0B)),
             ],
           ),
           const SizedBox(height: 28),
@@ -611,7 +617,15 @@ class _AdminStaffDashboardState extends State<AdminStaffDashboard> {
           ),
           const SizedBox(height: 12),
 
-          // ✅ NOUVEAU : Carte d'accès rapide aux annonces
+          _quickAccessCard(
+            icon: Icons.fingerprint,
+            iconColor: const Color(0xFF0F766E),
+            title: "Présences du personnel",
+            subtitle: "Gérer les pointages",
+            onTap: () => setState(() => selectedIndex = 11), // ✅ Nouvel index
+          ),
+          const SizedBox(height: 12),
+
           _quickAccessCard(
             icon: Icons.campaign_rounded,
             iconColor: const Color(0xFFEF4444),

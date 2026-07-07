@@ -228,7 +228,7 @@ class _StudentPaymentsScreenState extends State<StudentPaymentsScreen> with Sing
                 Expanded(
                   child: _buildSummaryCard(
                     'Total payé',
-                    '${_getTotalPaid().toStringAsFixed(0)} FCFA',
+                    '${_getTotalPaid().toStringAsFixed(0)} USD',
                     '${_getPaidCount()} paiement(s)',
                     Icons.payment,
                     const Color(0xFF10B981),
@@ -238,7 +238,7 @@ class _StudentPaymentsScreenState extends State<StudentPaymentsScreen> with Sing
                 Expanded(
                   child: _buildSummaryCard(
                     'En attente',
-                    '${_getTotalPending().toStringAsFixed(0)} FCFA',
+                    '${_getTotalPending().toStringAsFixed(0)} USD',
                     '${_getPendingCount()} paiement(s)',
                     Icons.pending,
                     const Color(0xFFF59E0B),
@@ -341,7 +341,7 @@ class _StudentPaymentsScreenState extends State<StudentPaymentsScreen> with Sing
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${(payment['amount'] as double).toStringAsFixed(0)} FCFA',
+                            '${(payment['amount'] as double).toStringAsFixed(0)} USD',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -480,7 +480,7 @@ class _StudentPaymentsScreenState extends State<StudentPaymentsScreen> with Sing
               const SizedBox(height: 8),
               _buildDetailRow('Type', payment['feeType']),
               const SizedBox(height: 8),
-              _buildDetailRow('Montant', '${(payment['amount'] as double).toStringAsFixed(0)} FCFA'),
+              _buildDetailRow('Montant', '${(payment['amount'] as double).toStringAsFixed(0)} USD'),
               const SizedBox(height: 8),
               _buildDetailRow('Statut', isPaid ? 'Payé' : 'En attente',
                   valueColor: isPaid ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),

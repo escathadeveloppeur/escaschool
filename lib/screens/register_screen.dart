@@ -1,6 +1,7 @@
 // lib/screens/register_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/auth_provider.dart';
@@ -8,6 +9,7 @@ import '../services/db_helper.dart';
 import '../services/school_service.dart';
 import '../models/university/etablissement_model.dart';
 import 'login_screen.dart';
+import 'super_admin/dialogs/add_school_dialog.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String? prefillEmail;
@@ -89,6 +91,20 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     _parentPhoneController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  /// ✅ Ouvrir le dialogue d'ajout d'école (pour les super admins)
+  void _openAddSchoolDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AddSchoolDialog(
+        onSchoolAdded: () {
+          // Rafraîchir la liste des écoles si nécessaire
+          setState(() {});
+          _showSnackBar('✅ École créée avec succès !', const Color(0xFF10B981));
+        },
+      ),
+    );
   }
 
   Future<void> _verifySchoolCode() async {
@@ -183,7 +199,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         _emailController.text.trim(),
         _passwordController.text.trim(),
         _selectedRole,
-        _selectedSchool!.firestoreId ?? '',  // String? -> String
+        _selectedSchool!.firestoreId ?? '',
       );
       
       if (success) {
@@ -418,24 +434,50 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller: _schoolCodeController,
-          decoration: InputDecoration(
-            labelText: 'Code de l\'école *',
-            hintText: 'Entrez le code fourni par l\'école',
-            prefixIcon: const Icon(Icons.business_outlined, color: Color(0xFF10B981)),
-            suffixIcon: _isVerifyingCode 
-              ? const SizedBox(width: 20, height: 20, child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2))) 
-              : IconButton(icon: const Icon(Icons.search, color: Color(0xFF10B981)), onPressed: _verifySchoolCode),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            filled: true, 
-            fillColor: Colors.white,
-          ),
-          onChanged: (value) { 
-            if (_selectedSchool != null) setState(() => _selectedSchool = null); 
-            if (_schoolCodeError.isNotEmpty) setState(() => _schoolCodeError = ''); 
-          },
-          validator: (v) => v == null || v.isEmpty ? 'Code école requis' : null,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _schoolCodeController,
+                decoration: InputDecoration(
+                  labelText: 'Code de l\'école *',
+                  hintText: 'Entrez le code fourni par l\'école',
+                  prefixIcon: const Icon(Icons.business_outlined, color: Color(0xFF10B981)),
+                  suffixIcon: _isVerifyingCode 
+                    ? const SizedBox(width: 20, height: 20, child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2))) 
+                    : IconButton(
+                        icon: const Icon(Icons.search, color: Color(0xFF10B981)), 
+                        onPressed: _verifySchoolCode,
+                      ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  filled: true, 
+                  fillColor: Colors.white,
+                ),
+                onChanged: (value) { 
+                  if (_selectedSchool != null) setState(() => _selectedSchool = null); 
+                  if (_schoolCodeError.isNotEmpty) setState(() => _schoolCodeError = ''); 
+                },
+                validator: (v) => v == null || v.isEmpty ? 'Code école requis' : null,
+              ),
+            ),
+            // ✅ AJOUT: Bouton pour ajouter une école
+            Container(
+              margin: const EdgeInsets.only(left: 8),
+              child: Tooltip(
+                message: 'Ajouter une nouvelle école (Admin)',
+                child: IconButton(
+                  icon: const Icon(Icons.add_business, color: Color(0xFF8B5CF6)),
+                  onPressed: _openAddSchoolDialog,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         if (_schoolCodeError.isNotEmpty) 
           Padding(padding: const EdgeInsets.only(top: 8, left: 12), child: Text(_schoolCodeError, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12))),

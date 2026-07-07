@@ -114,6 +114,7 @@ class GradeModel extends HiveObject {
       'teacher': teacher,
     };
   }
+
   
   // Constructeur depuis Map
   factory GradeModel.fromMap(Map<String, dynamic> map) {
@@ -132,4 +133,29 @@ class GradeModel extends HiveObject {
       teacher: map['teacher'],
     );
   }
+  // lib/models/grade_model.dart
+
+// Ajoutez cette méthode dans votre classe GradeModel
+
+/// Convertir en Map pour Firestore
+Map<String, dynamic> toFirestoreMap() {
+  return {
+    'studentKeyHive': studentKeyHive,
+    'studentName': studentName,
+    'className': className,
+    
+    'subject': subject,
+    'evaluationType': evaluationType,
+    'score': score,
+    'maxScore': maxScore,
+    'date': Timestamp.fromDate(date),
+    'coefficient': coefficient,
+    'comments': comments,
+    'teacher': teacher,
+    
+    
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
+}
+  
 }

@@ -329,7 +329,7 @@ class _StaffPaymentsScreenState extends State<StaffPaymentsScreen> with SingleTi
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            'Salaire: ${(widget.staff!['salary'] ?? 0).toStringAsFixed(0)} FCFA/mois',
+                            'Salaire: ${(widget.staff!['salary'] ?? 0).toStringAsFixed(0)} USD/mois',
                             style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
                           ),
                         ),
@@ -588,7 +588,7 @@ class _StaffPaymentsScreenState extends State<StaffPaymentsScreen> with SingleTi
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Net: ${(payment['netSalary'] as double).toStringAsFixed(0)} FCFA • ${payment['paymentMethod']}',
+                                    'Net: ${(payment['netSalary'] as double).toStringAsFixed(0)} USD • ${payment['paymentMethod']}',
                                     style: TextStyle(fontSize: 12, color: _AppColors.textMuted),
                                   ),
                                   if ((payment['bonus'] as double) > 0)
@@ -599,7 +599,7 @@ class _StaffPaymentsScreenState extends State<StaffPaymentsScreen> with SingleTi
                                           Icon(Icons.add_circle_rounded, size: 12, color: _AppColors.success),
                                           const SizedBox(width: 4),
                                           Text(
-                                            'Prime: +${(payment['bonus'] as double).toStringAsFixed(0)} FCFA',
+                                            'Prime: +${(payment['bonus'] as double).toStringAsFixed(0)} USD',
                                             style: TextStyle(fontSize: 11, color: _AppColors.success),
                                           ),
                                         ],
@@ -613,7 +613,7 @@ class _StaffPaymentsScreenState extends State<StaffPaymentsScreen> with SingleTi
                                           Icon(Icons.remove_circle_rounded, size: 12, color: _AppColors.danger),
                                           const SizedBox(width: 4),
                                           Text(
-                                            'Déduction: -${(payment['deduction'] as double).toStringAsFixed(0)} FCFA',
+                                            'Déduction: -${(payment['deduction'] as double).toStringAsFixed(0)} USD',
                                             style: TextStyle(fontSize: 11, color: _AppColors.danger),
                                           ),
                                         ],

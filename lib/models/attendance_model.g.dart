@@ -24,14 +24,23 @@ class AttendanceModelAdapter extends TypeAdapter<AttendanceModel> {
       status: fields[4] as String,
       reason: fields[5] as String?,
       subject: fields[6] as String,
-      studentId: fields[7] as dynamic,
+      studentId: fields[7] as int?,
+      classCycleType: fields[8] as String?,
+      sectionId: fields[9] as String?,
+      sectionName: fields[10] as String?,
+      classFirestoreId: fields[11] as String?,
+      studentFirestoreId: fields[12] as String?,
+      schoolId: fields[13] as String?,
+      attendanceFirestoreId: fields[14] as String?,
+      classId: fields[15] as String?,
+      studentIdFirestore: fields[16] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AttendanceModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.studentKeyHive)
       ..writeByte(1)
@@ -47,7 +56,25 @@ class AttendanceModelAdapter extends TypeAdapter<AttendanceModel> {
       ..writeByte(6)
       ..write(obj.subject)
       ..writeByte(7)
-      ..write(obj.studentId);
+      ..write(obj.studentId)
+      ..writeByte(8)
+      ..write(obj.classCycleType)
+      ..writeByte(9)
+      ..write(obj.sectionId)
+      ..writeByte(10)
+      ..write(obj.sectionName)
+      ..writeByte(11)
+      ..write(obj.classFirestoreId)
+      ..writeByte(12)
+      ..write(obj.studentFirestoreId)
+      ..writeByte(13)
+      ..write(obj.schoolId)
+      ..writeByte(14)
+      ..write(obj.attendanceFirestoreId)
+      ..writeByte(15)
+      ..write(obj.classId)
+      ..writeByte(16)
+      ..write(obj.studentIdFirestore);
   }
 
   @override

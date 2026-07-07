@@ -1,6 +1,7 @@
 // lib/screens/super_admin/dialogs/add_school_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../services/db_helper.dart';
 import '../../../services/school_service.dart';
@@ -154,6 +155,157 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
     super.dispose();
   }
 
+  /// ✅ Afficher le dialogue avec le code de l'école et le statut suspendu
+  void _showSchoolCreatedDialog(String schoolName, String schoolCode) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B)),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'École créée !',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Voici les informations de l\'école :'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6).withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '📚 $schoolName',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '🔑 CODE DE L\'ÉCOLE :',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      schoolCode,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // ✅ Message important sur le statut SUSPENDU
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_rounded, color: Color(0xFFF59E0B), size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '⚠️ École en attente d\'activation',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFF59E0B),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'L\'école est actuellement SUSPENDUE. Rendez-vous dans l\'onglet "Écoles" pour l\'activer.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '📋 Copiez ce code et partagez-le avec les enseignants, étudiants et parents.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context); // Fermer le dialogue d'ajout
+              widget.onSchoolAdded();
+            },
+            child: const Text('OK'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              // Copier le code
+              Clipboard.setData(ClipboardData(text: schoolCode));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Code copié dans le presse-papier !'),
+                  backgroundColor: Color(0xFF10B981),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('Copier le code'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveSchool() async {
     if (!_formKey.currentState!.validate()) return;
     if (_nomController.text.isEmpty) return;
@@ -181,7 +333,9 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
         adresseComplete += ', ${_selectedPays!}';
       }
       
-      // Créer l'école avec toutes les informations
+      final schoolCode = EtablissementModel.generateSchoolCode(_nomController.text);
+      
+      // 🔥 CRÉER L'ÉCOLE AVEC isActive = FALSE (SUSPENDUE)
       final newSchool = EtablissementModel(
         id: 0,
         nom: _nomController.text,
@@ -191,10 +345,9 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
         email: _emailController.text,
         siteWeb: _siteWebController.text,
         createdAt: DateTime.now(),
-        isActive: true,
-        schoolCode: EtablissementModel.generateSchoolCode(_nomController.text),
+        isActive: false, // 🔥 L'école est créée SUSPENDUE pour sécurité
+        schoolCode: schoolCode,
         
-        // NOUVEAUX CHAMPS
         pays: _selectedPays,
         province: _provinceController.text.isNotEmpty ? _provinceController.text : _selectedProvince,
         ville: _villeController.text,
@@ -210,6 +363,7 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
       );
 
       print('📝 Création de l\'école: ${newSchool.nom}');
+      print('🔒 Statut: SUSPENDU (en attente d\'activation)');
       print('📍 Pays: ${newSchool.pays}');
       print('📍 Province: ${newSchool.province}');
       
@@ -224,19 +378,13 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
         await db.updateEtablissementFirestoreId(localId, firestoreId);
       }
       
-      await db.addLog("Super Admin a ajouté l'école: ${newSchool.nom} (${newSchool.pays})");
+      await db.addLog("Super Admin a ajouté l'école: ${newSchool.nom} (${newSchool.pays}) - STATUT: SUSPENDU");
       
+      // ✅ AFFICHER LE MESSAGE AVEC LE CODE
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('École ajoutée avec succès'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        widget.onSchoolAdded();
-        Navigator.pop(context);
+        _showSchoolCreatedDialog(newSchool.nom, schoolCode);
       }
+      
     } catch (e) {
       print('❌ Erreur: $e');
       if (mounted) {
@@ -696,6 +844,30 @@ class _AddSchoolDialogState extends State<AddSchoolDialog> {
                                 return DropdownMenuItem(value: langue, child: Text(langue));
                               }).toList(),
                               onChanged: (value) => setState(() => _selectedLangue = value),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // ✅ Message d'information sur le statut
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.security, color: Color(0xFFF59E0B)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '🔒 merci d\'avoir choisi notre services escaschool pour la securité de vos donners et votre etablissement, veiller patienter le temps que votre etablisement soit activer normalement sa prend - de 48H en fin que le service puisse verifier vos coordonner et l\'existance de votre etablisement merci de nous faire confiance',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                              ),
                             ),
                           ],
                         ),

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import 'add_student.dart';
 import 'student_permissions.dart';
+import 'qr_code_management_screen.dart';  // Ajout de l'import
 
 class AdminStudents extends StatefulWidget {
   final VoidCallback? onChanged;
@@ -31,8 +32,8 @@ class _AdminStudentsState extends State<AdminStudents> with SingleTickerProvider
   String? _selectedClassId; // Classe sélectionnée
 
   final List<Map<String, dynamic>> _cycles = [
-    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': Color(0xFF10B981)},
-    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': Color(0xFF8B5CF6)},
+    {'id': 'primaire', 'name': 'Primaire', 'icon': Icons.abc, 'color': const Color(0xFF10B981)},
+    {'id': 'secondaire', 'name': 'Secondaire', 'icon': Icons.school, 'color': const Color(0xFF8B5CF6)},
   ];
 
   @override
@@ -531,6 +532,20 @@ class _AdminStudentsState extends State<AdminStudents> with SingleTickerProvider
     if (ok) _deleteStudent(firestoreId);
   }
 
+  // ✅ NOUVEAU : Navigation vers la gestion des QR codes
+  void _navigateToQRManagement() {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QRCodeManagementScreen(
+          schoolId: auth.currentSchoolId ?? '',
+          schoolName: auth.schoolName ?? 'Mon École',
+        ),
+      ),
+    ).then((_) => _loadAllData()); // Recharger les données au retour
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -559,6 +574,25 @@ class _AdminStudentsState extends State<AdminStudents> with SingleTickerProvider
                 ],
               ),
             ),
+
+          // ✅ NOUVEAU : Bouton Gestion des QR codes
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ElevatedButton.icon(
+              onPressed: _navigateToQRManagement,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Gestion des QR codes'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                minimumSize: const Size(double.infinity, 50),
+              ),
+            ),
+          ),
 
           // Sélecteur de cycle (Primaire / Secondaire)
           Container(

@@ -9,13 +9,20 @@ class AnnouncementService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final DBHelper _dbHelper = DBHelper();
 
-  /// ✅ Créer une annonce dans Firestore
+  // ==================== CRUD ANNONCES ====================
+
+  /// ✅ Créer une annonce dans Firestore (dans une sous-collection de l'école)
   Future<String> createAnnouncement(Map<String, dynamic> announcement, String schoolId) async {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
 
-      final docRef = _firestore.collection('announcements').doc();
+      // 🔥 Changement: utiliser une sous-collection de l'école
+      final docRef = _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .doc();
       
       final audience = announcement['audience'] ?? 'all';
       final targetedRoles = announcement['targetedRoles'] ?? _getTargetedRoles(audience);
@@ -27,7 +34,7 @@ class AnnouncementService {
         'title': announcement['title'],
         'content': announcement['content'],
         'date': announcement['date'] ?? FieldValue.serverTimestamp(),
-        'schoolId': schoolId,
+        // ❌ On retire schoolId car c'est implicite via le chemin
         'localId': announcement['id'],
         'createdBy': user.uid,
         'createdByName': announcement['createdByName'] ?? user.displayName ?? 'Admin',
@@ -56,7 +63,7 @@ class AnnouncementService {
   }
 
   /// ✅ Mettre à jour une annonce dans Firestore
-  Future<void> updateAnnouncement(String announcementId, Map<String, dynamic> announcement) async {
+  Future<void> updateAnnouncement(String schoolId, String announcementId, Map<String, dynamic> announcement) async {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
@@ -79,7 +86,10 @@ class AnnouncementService {
         'updatedBy': user.uid,
       };
 
+      // 🔥 Changement: utiliser la sous-collection
       await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
           .doc(announcementId)
           .update(updateData);
@@ -93,9 +103,12 @@ class AnnouncementService {
   }
 
   /// ✅ Supprimer une annonce de Firestore
-  Future<void> deleteAnnouncement(String announcementId) async {
+  Future<void> deleteAnnouncement(String schoolId, String announcementId) async {
     try {
+      // 🔥 Changement: utiliser la sous-collection
       await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
           .doc(announcementId)
           .delete();
@@ -108,10 +121,33 @@ class AnnouncementService {
     }
   }
 
+  /// ✅ Supprimer toutes les annonces d'une école
+  Future<void> deleteAllAnnouncements(String schoolId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .get();
+      
+      for (var doc in snapshot.docs) {
+        await doc.reference.delete();
+      }
+      
+      print('🗑️ Toutes les annonces supprimées pour l\'école: $schoolId');
+      
+    } catch (e) {
+      print('❌ Erreur suppression toutes les annonces: $e');
+      throw e;
+    }
+  }
+
   /// ✅ Épingler/Désépingler une annonce
-  Future<void> togglePinAnnouncement(String announcementId, bool isPinned) async {
+  Future<void> togglePinAnnouncement(String schoolId, String announcementId, bool isPinned) async {
     try {
       await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
           .doc(announcementId)
           .update({
@@ -129,9 +165,11 @@ class AnnouncementService {
   }
 
   /// ✅ Incrémenter le compteur de vues
-  Future<void> incrementViewCount(String announcementId) async {
+  Future<void> incrementViewCount(String schoolId, String announcementId) async {
     try {
       await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
           .doc(announcementId)
           .update({
@@ -143,6 +181,8 @@ class AnnouncementService {
     }
   }
 
+  // ==================== RÉCUPÉRATION DES ANNONCES ====================
+
   /// ✅ Récupérer les annonces pour un utilisateur
   Future<List<Map<String, dynamic>>> getAnnouncementsForUser(
     String schoolId, 
@@ -151,9 +191,11 @@ class AnnouncementService {
     String? classId,
   }) async {
     try {
+      // 🔥 Changement: utiliser la sous-collection
       Query query = _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
-          .where('schoolId', isEqualTo: schoolId)
           .where('status', isEqualTo: 'active')
           .orderBy('isPinned', descending: true)
           .orderBy('createdAt', descending: true);
@@ -225,9 +267,11 @@ class AnnouncementService {
   /// ✅ Récupérer les annonces épinglées
   Future<List<Map<String, dynamic>>> getPinnedAnnouncements(String schoolId) async {
     try {
+      // 🔥 Changement: utiliser la sous-collection
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
-          .where('schoolId', isEqualTo: schoolId)
           .where('isPinned', isEqualTo: true)
           .where('status', isEqualTo: 'active')
           .orderBy('pinnedAt', descending: true)
@@ -249,6 +293,79 @@ class AnnouncementService {
     }
   }
 
+  /// ✅ Récupérer les annonces par audience
+  Future<List<Map<String, dynamic>>> getAnnouncementsByAudience(String schoolId, String audience) async {
+    try {
+      final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .where('audience', isEqualTo: audience)
+          .where('status', isEqualTo: 'active')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'firestoreId': doc.id,
+          ...data,
+        };
+      }).toList();
+
+    } catch (e) {
+      print('❌ Erreur récupération annonces par audience: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Écouter les annonces en temps réel
+  Stream<List<Map<String, dynamic>>> listenToAnnouncements(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('announcements')
+        .where('status', isEqualTo: 'active')
+        .orderBy('isPinned', descending: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'id': doc.id,
+              'firestoreId': doc.id,
+              ...data,
+            };
+          }).toList();
+        });
+  }
+
+  /// ✅ Écouter les annonces épinglées en temps réel
+  Stream<List<Map<String, dynamic>>> listenToPinnedAnnouncements(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('announcements')
+        .where('isPinned', isEqualTo: true)
+        .where('status', isEqualTo: 'active')
+        .orderBy('pinnedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {
+              'id': doc.id,
+              'firestoreId': doc.id,
+              ...data,
+            };
+          }).toList();
+        });
+  }
+
+  // ==================== SYNCHRONISATION ====================
+
   /// ✅ Synchroniser toutes les annonces locales vers Firestore
   Future<void> syncAllAnnouncementsToFirestore(String schoolId) async {
     try {
@@ -265,6 +382,8 @@ class AnnouncementService {
       for (var announcement in announcements) {
         try {
           final existing = await _firestore
+              .collection('schools')
+              .doc(schoolId)
               .collection('announcements')
               .where('localId', isEqualTo: announcement['id'])
               .get();
@@ -292,8 +411,9 @@ class AnnouncementService {
       print('📥 Synchronisation des annonces depuis Firestore...');
       
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
-          .where('schoolId', isEqualTo: schoolId)
           .get();
 
       int addedCount = 0;
@@ -310,7 +430,7 @@ class AnnouncementService {
           'date': data['date'] != null 
               ? (data['date'] as Timestamp).toDate().toIso8601String()
               : DateTime.now().toIso8601String(),
-          'schoolId': data['schoolId'],
+          'schoolId': schoolId,
           'audience': data['audience'] ?? 'all',
           'targetedRoles': data['targetedRoles'] ?? [],
           'classId': data['classId'],
@@ -339,11 +459,13 @@ class AnnouncementService {
   }
 
   /// ✅ Supprimer les annonces expirées
-  Future<void> deleteExpiredAnnouncements() async {
+  Future<void> deleteExpiredAnnouncements(String schoolId) async {
     try {
       final now = Timestamp.now();
       
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
           .where('expiresAt', isLessThan: now)
           .get();
@@ -420,13 +542,14 @@ class AnnouncementService {
   Future<int> countAnnouncementsBySchool(String schoolId) async {
     try {
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
-          .where('schoolId', isEqualTo: schoolId)
           .count()
           .get();
           
-      // ✅ Correction: retourner snapshot.count directement (c'est un int)
       return snapshot.count ?? 0;
+      
     } catch (e) {
       print('❌ Erreur comptage annonces: $e');
       return 0;
@@ -441,16 +564,18 @@ class AnnouncementService {
       
       for (var audience in audiences) {
         final snapshot = await _firestore
+            .collection('schools')
+            .doc(schoolId)
             .collection('announcements')
-            .where('schoolId', isEqualTo: schoolId)
             .where('audience', isEqualTo: audience)
             .count()
             .get();
-        // ✅ Correction: utiliser snapshot.count au lieu de count
+            
         counts[audience] = snapshot.count ?? 0;
       }
       
       return counts;
+      
     } catch (e) {
       print('❌ Erreur comptage annonces par audience: $e');
       return {};
@@ -464,8 +589,9 @@ class AnnouncementService {
   }) async {
     try {
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('announcements')
-          .where('schoolId', isEqualTo: schoolId)
           .where('status', isEqualTo: 'active')
           .orderBy('createdAt', descending: true)
           .limit(limit)
@@ -482,6 +608,124 @@ class AnnouncementService {
 
     } catch (e) {
       print('❌ Erreur récupération annonces récentes: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Obtenir les statistiques des annonces
+  Future<Map<String, dynamic>> getAnnouncementStats(String schoolId) async {
+    try {
+      final total = await countAnnouncementsBySchool(schoolId);
+      final byAudience = await countAnnouncementsByAudience(schoolId);
+      
+      // Annonces épinglées
+      final pinnedSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .where('isPinned', isEqualTo: true)
+          .count()
+          .get();
+      
+      // Annonces actives
+      final activeSnapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .where('status', isEqualTo: 'active')
+          .count()
+          .get();
+      
+      return {
+        'total': total,
+        'pinned': pinnedSnapshot.count ?? 0,
+        'active': activeSnapshot.count ?? 0,
+        'byAudience': byAudience,
+      };
+      
+    } catch (e) {
+      print('❌ Erreur statistiques annonces: $e');
+      return {};
+    }
+  }
+
+  /// ✅ Écouter les statistiques des annonces en temps réel
+  Stream<Map<String, dynamic>> listenToAnnouncementStats(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('announcements')
+        .snapshots()
+        .asyncMap((snapshot) async {
+          final total = snapshot.docs.length;
+          final pinned = snapshot.docs.where((doc) => doc['isPinned'] == true).length;
+          final active = snapshot.docs.where((doc) => doc['status'] == 'active').length;
+          
+          // Compter par audience
+          final Map<String, int> byAudience = {};
+          for (var doc in snapshot.docs) {
+            final audience = doc['audience'] ?? 'all';
+            byAudience[audience] = (byAudience[audience] ?? 0) + 1;
+          }
+          
+          return {
+            'total': total,
+            'pinned': pinned,
+            'active': active,
+            'byAudience': byAudience,
+          };
+        });
+  }
+
+  /// ✅ Récupérer une annonce par son ID
+  Future<Map<String, dynamic>?> getAnnouncementById(String schoolId, String announcementId) async {
+    try {
+      final doc = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .doc(announcementId)
+          .get();
+      
+      if (!doc.exists) return null;
+      
+      final data = doc.data() as Map<String, dynamic>;
+      return {
+        'id': doc.id,
+        'firestoreId': doc.id,
+        ...data,
+      };
+      
+    } catch (e) {
+      print('❌ Erreur récupération annonce: $e');
+      return null;
+    }
+  }
+
+  /// ✅ Rechercher des annonces par titre
+  Future<List<Map<String, dynamic>>> searchAnnouncements(String schoolId, String query) async {
+    try {
+      if (query.isEmpty) return [];
+      
+      final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('announcements')
+          .where('title', isGreaterThanOrEqualTo: query)
+          .where('title', isLessThanOrEqualTo: query + '\uf8ff')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'firestoreId': doc.id,
+          ...data,
+        };
+      }).toList();
+
+    } catch (e) {
+      print('❌ Erreur recherche annonces: $e');
       return [];
     }
   }

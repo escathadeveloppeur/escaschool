@@ -1,5 +1,8 @@
+// lib/screens/staff/manage_staff_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/db_helper.dart';
 import '../../services/staff_service.dart';
 import '../../services/payment_service.dart';
@@ -7,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../models/staff_model.dart';
 import 'add_staff_screen.dart';
 import 'staff_payments_screen.dart';
+import 'staff_card_management_screen.dart';
 
 class ManageStaffScreen extends StatefulWidget {
   const ManageStaffScreen({super.key});
@@ -20,14 +24,16 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
   final StaffService _staffService = StaffService();
   List<StaffModel> _staffList = [];
   List<StaffModel> _filteredStaff = [];
+  List<StaffModel> _teachers = [];
   bool _isLoading = true;
+  bool _showTeachers = false;
   String _searchQuery = '';
   String _selectedPosition = 'Tous';
   late AnimationController _animationController;
 
-  // Liste des postes disponibles
   final List<String> _positions = [
     'Tous',
+    'Professeur',
     'Ménage',
     'Sentinelle / Sécurité',
     'Chauffeur',
@@ -48,7 +54,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _loadStaff();
+    _loadAllData();
   }
 
   @override
@@ -57,36 +63,107 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
     super.dispose();
   }
 
-  Future<void> _loadStaff() async {
+  Future<void> _loadAllData() async {
     setState(() => _isLoading = true);
     
     try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final String? schoolId = auth.currentSchoolId;
-      
-      if (auth.isSuperAdmin) {
-        _staffList = await _staffService.getAllStaff();
-      } else if (schoolId != null && schoolId.isNotEmpty) {
-        // ✅ Passer schoolId directement comme String
-        _staffList = await _staffService.getStaffBySchool(schoolId);
-      }
-      
-      // ✅ Synchronisation avec Firestore (utilise schoolId comme String)
-      await _staffService.syncAllStaffToFirestore(schoolId ?? '');
+      await Future.wait([
+        _loadStaffFromFirestore(),
+        _loadTeachers(),
+      ]);
       
       _filterStaff();
       _animationController.forward(from: 0);
     } catch (e) {
-      print('Erreur chargement personnel: $e');
+      print('Erreur chargement données: $e');
       _showSnackBar('Erreur de chargement', const Color(0xFFEF4444));
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  /// ✅ Charger tout le personnel directement depuis Firestore
+  Future<void> _loadStaffFromFirestore() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final String? schoolId = auth.currentSchoolId;
+
+      if (schoolId == null || schoolId.isEmpty) {
+        _staffList = [];
+        return;
+      }
+
+      // 🔥 Récupérer tous les membres du personnel depuis Firestore
+      final snapshot = await FirebaseFirestore.instance
+          .collection('staff')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+
+      _staffList = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return StaffModel(
+          id: data['localId'],
+          firestoreId: doc.id,
+          fullName: data['fullName'] ?? '',
+          position: data['position'] ?? '',
+          phone: data['phone'],
+          email: data['email'],
+          address: data['address'],
+          hireDate: data['hireDate'] != null ? DateTime.parse(data['hireDate']) : DateTime.now(),
+          salary: (data['salary'] ?? 0.0).toDouble(),
+          isActive: data['isActive'] ?? true,
+          schoolId: data['schoolId'] ?? schoolId,
+          createdAt: data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : null,
+          updatedAt: data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate() : null,
+        );
+      }).toList();
+
+      print('✅ ${_staffList.length} personnels chargés depuis Firestore');
+    } catch (e) {
+      print('❌ Erreur chargement personnel: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Charger les professeurs depuis Firestore
+  Future<void> _loadTeachers() async {
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final String? schoolId = auth.currentSchoolId;
+      
+      if (schoolId == null || schoolId.isEmpty) {
+        _teachers = [];
+        return;
+      }
+
+      final teachersSnapshot = await FirebaseFirestore.instance
+          .collection('teachers')
+          .where('schoolId', isEqualTo: schoolId)
+          .get();
+      
+      _teachers = teachersSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return StaffModel.fromFirestore(data, doc.id);
+      }).toList();
+      
+      print('✅ ${_teachers.length} professeurs chargés');
+    } catch (e) {
+      print('❌ Erreur chargement professeurs: $e');
+      throw e;
+    }
+  }
+
   void _filterStaff() {
     setState(() {
-      _filteredStaff = _staffList.where((staff) {
+      List<StaffModel> combinedList = [];
+      
+      if (_showTeachers) {
+        combinedList = _teachers;
+      } else {
+        combinedList = _staffList;
+      }
+      
+      _filteredStaff = combinedList.where((staff) {
         final matchesSearch = _searchQuery.isEmpty ||
             staff.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
             staff.position.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -131,15 +208,34 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
     );
 
     if (confirm == true) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final String? schoolId = auth.currentSchoolId;
-      
-      // ✅ Passer schoolId comme String (pas de conversion en int)
-      await _staffService.deleteStaff(staff.id!, staff.fullName, schoolId ?? '');
-      
-      await _loadStaff();
-      _showSnackBar('Personnel supprimé', const Color(0xFF10B981));
+      try {
+        // ✅ Supprimer directement de Firestore
+        if (staff.firestoreId != null && staff.firestoreId!.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('staff')
+              .doc(staff.firestoreId)
+              .delete();
+        }
+        
+        await _loadAllData();
+        _showSnackBar('Supprimé avec succès', const Color(0xFF10B981));
+      } catch (e) {
+        _showSnackBar('Erreur lors de la suppression', const Color(0xFFEF4444));
+      }
     }
+  }
+
+  void _navigateToCardManagement() {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StaffCardManagementScreen(
+          schoolId: auth.currentSchoolId ?? '',
+          schoolName: auth.schoolName ?? 'ECOLE SCHOOL',
+        ),
+      ),
+    );
   }
 
   @override
@@ -158,26 +254,44 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.credit_card, color: Color(0xFF0F766E)),
+            onPressed: _navigateToCardManagement,
+            tooltip: 'Cartes de service',
+          ),
+          IconButton(
+            icon: Icon(
+              _showTeachers ? Icons.person_off : Icons.person,
+              color: _showTeachers ? Colors.purple : const Color(0xFF10B981),
+            ),
+            onPressed: () {
+              setState(() {
+                _showTeachers = !_showTeachers;
+                _selectedPosition = 'Tous';
+                _filterStaff();
+              });
+            },
+            tooltip: _showTeachers ? 'Voir le personnel' : 'Voir les professeurs',
+          ),
+          IconButton(
             icon: const Icon(Icons.add, color: Color(0xFF10B981)),
             onPressed: () async {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddStaffScreen()),
               );
-              if (result == true) await _loadStaff();
+              if (result == true) await _loadAllData();
             },
             tooltip: 'Ajouter',
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadStaff,
+            onPressed: _loadAllData,
             tooltip: 'Actualiser',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Indicateur d'école
           if (auth.currentSchoolId != null && !auth.isSuperAdmin)
             Container(
               margin: const EdgeInsets.all(16),
@@ -194,11 +308,27 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                     auth.schoolName ?? 'Personnel de l\'école',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
                   ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _showTeachers ? Colors.purple.withOpacity(0.1) : const Color(0xFF10B981).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _showTeachers ? '👨‍🏫 Professeurs' : '👤 Personnel',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _showTeachers ? Colors.purple : const Color(0xFF10B981),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
 
-          // Filtres - Barre de défilement horizontale pour les postes
+          // Filtres
           Container(
             height: 50,
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -244,7 +374,9 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                 _filterStaff();
               },
               decoration: InputDecoration(
-                hintText: 'Rechercher par nom, poste ou téléphone...',
+                hintText: _showTeachers 
+                    ? 'Rechercher un professeur...' 
+                    : 'Rechercher par nom, poste ou téléphone...',
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF10B981)),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -284,20 +416,45 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                     color: const Color(0xFF3B82F6).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.people, size: 16, color: Color(0xFF3B82F6)),
+                  child: Icon(
+                    _showTeachers ? Icons.school : Icons.people,
+                    size: 16,
+                    color: const Color(0xFF3B82F6),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_filteredStaff.length} employé(s)',
+                  _showTeachers 
+                      ? '${_filteredStaff.length} professeur(s)'
+                      : '${_filteredStaff.length} employé(s)',
                   style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w500),
                 ),
+                if (_teachers.isNotEmpty && !_showTeachers)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '+ ${_teachers.length} profs',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.purple[600],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
 
           const SizedBox(height: 12),
 
-          // Liste du personnel
+          // Liste
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -306,12 +463,30 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+                            Icon(
+                              _showTeachers ? Icons.school_outlined : Icons.people_outline,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 16),
                             Text(
-                              'Aucun employé trouvé',
+                              _showTeachers 
+                                  ? 'Aucun professeur trouvé'
+                                  : 'Aucun employé trouvé',
                               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                             ),
+                            if (!_showTeachers)
+                              TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _showTeachers = true;
+                                    _selectedPosition = 'Tous';
+                                    _filterStaff();
+                                  });
+                                },
+                                icon: const Icon(Icons.school),
+                                label: const Text('Voir les professeurs'),
+                              ),
                           ],
                         ),
                       )
@@ -320,6 +495,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                         itemCount: _filteredStaff.length,
                         itemBuilder: (context, index) {
                           final staff = _filteredStaff[index];
+                          final isTeacher = staff.position == 'Professeur';
                           return FadeTransition(
                             opacity: _animationController,
                             child: Container(
@@ -334,6 +510,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
+                                border: isTeacher ? Border.all(color: Colors.purple.withOpacity(0.2), width: 1) : null,
                               ),
                               child: Column(
                                 children: [
@@ -346,22 +523,53 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                         gradient: LinearGradient(
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
-                                          colors: staff.isActive
-                                              ? [const Color(0xFF0F766E), const Color(0xFF14B8A6)]
-                                              : [Colors.grey[400]!, Colors.grey[500]!],
+                                          colors: isTeacher
+                                              ? [Colors.purple[700]!, Colors.purple[500]!]
+                                              : staff.isActive
+                                                  ? [const Color(0xFF0F766E), const Color(0xFF14B8A6)]
+                                                  : [Colors.grey[400]!, Colors.grey[500]!],
                                         ),
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Center(
                                         child: Text(
                                           staff.fullName.isNotEmpty ? staff.fullName[0].toUpperCase() : '?',
-                                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                    title: Text(
-                                      staff.fullName,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                    title: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            staff.fullName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isTeacher)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.purple.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              '👨‍🏫 Prof',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                color: Colors.purple[600],
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     subtitle: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,12 +578,18 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF3B82F6).withOpacity(0.1),
+                                            color: isTeacher
+                                                ? Colors.purple.withOpacity(0.1)
+                                                : const Color(0xFF3B82F6).withOpacity(0.1),
                                             borderRadius: BorderRadius.circular(12),
                                           ),
                                           child: Text(
                                             staff.position,
-                                            style: const TextStyle(fontSize: 11, color: Color(0xFF3B82F6), fontWeight: FontWeight.w500),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isTeacher ? Colors.purple[600] : const Color(0xFF3B82F6),
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 4),
@@ -397,7 +611,27 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // Bouton Paiements
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0F766E).withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: IconButton(
+                                            icon: const Icon(Icons.credit_card, color: Color(0xFF0F766E), size: 20),
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => StaffCardManagementScreen(
+                                                    schoolId: auth.currentSchoolId ?? '',
+                                                    schoolName: auth.schoolName ?? 'ECOLE SCHOOL',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            tooltip: 'Carte de service',
+                                          ),
+                                        ),
                                         Container(
                                           decoration: BoxDecoration(
                                             color: const Color(0xFF10B981).withOpacity(0.1),
@@ -421,7 +655,6 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                             tooltip: 'Gérer les paiements',
                                           ),
                                         ),
-                                        // Bouton Modifier
                                         Container(
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFF59E0B).withOpacity(0.1),
@@ -436,12 +669,11 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> with SingleTicker
                                                   builder: (_) => AddStaffScreen(staff: staff),
                                                 ),
                                               );
-                                              if (result == true) await _loadStaff();
+                                              if (result == true) await _loadAllData();
                                             },
                                             tooltip: 'Modifier',
                                           ),
                                         ),
-                                        // Bouton Supprimer
                                         Container(
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFEF4444).withOpacity(0.1),

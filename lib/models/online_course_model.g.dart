@@ -22,8 +22,8 @@ class OnlineCourseModelAdapter extends TypeAdapter<OnlineCourseModel> {
       description: fields[2] as String,
       subject: fields[3] as String,
       className: fields[4] as String,
-      classId: fields[5] as int,
-      professorId: fields[6] as int,
+      classId: fields[5] as String,
+      professorId: fields[6] as String,
       chapters: (fields[7] as List)
           .map((dynamic e) => (e as Map).cast<String, dynamic>())
           .toList(),
@@ -32,13 +32,22 @@ class OnlineCourseModelAdapter extends TypeAdapter<OnlineCourseModel> {
           .toList(),
       createdAt: fields[9] as DateTime,
       updatedAt: fields[10] as DateTime,
+      schoolFirestoreId: fields[11] as String?,
+      courseFirestoreId: fields[12] as String?,
+      professorName: fields[13] as String?,
+      schoolId: fields[14] as int?,
+      localKey: fields[15] as String?,
+      isPublished: fields[16] as bool,
+      thumbnailUrl: fields[17] as String?,
+      duration: fields[18] as int?,
+      enrolledStudents: fields[19] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, OnlineCourseModel obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -60,7 +69,25 @@ class OnlineCourseModelAdapter extends TypeAdapter<OnlineCourseModel> {
       ..writeByte(9)
       ..write(obj.createdAt)
       ..writeByte(10)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(11)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(12)
+      ..write(obj.courseFirestoreId)
+      ..writeByte(13)
+      ..write(obj.professorName)
+      ..writeByte(14)
+      ..write(obj.schoolId)
+      ..writeByte(15)
+      ..write(obj.localKey)
+      ..writeByte(16)
+      ..write(obj.isPublished)
+      ..writeByte(17)
+      ..write(obj.thumbnailUrl)
+      ..writeByte(18)
+      ..write(obj.duration)
+      ..writeByte(19)
+      ..write(obj.enrolledStudents);
   }
 
   @override

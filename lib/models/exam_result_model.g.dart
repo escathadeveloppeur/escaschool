@@ -27,13 +27,20 @@ class ExamResultModelAdapter extends TypeAdapter<ExamResultModel> {
           .toList(),
       submittedAt: fields[6] as DateTime,
       isGraded: fields[7] as bool,
+      examFirestoreId: fields[8] as String?,
+      studentFirestoreId: fields[9] as String?,
+      resultFirestoreId: fields[10] as String?,
+      localKey: fields[11] as String?,
+      schoolId: fields[12] as String?,
+      schoolFirestoreId: fields[13] as String?,
+      percentage: fields[14] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ExamResultModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.examId)
       ..writeByte(1)
@@ -49,7 +56,21 @@ class ExamResultModelAdapter extends TypeAdapter<ExamResultModel> {
       ..writeByte(6)
       ..write(obj.submittedAt)
       ..writeByte(7)
-      ..write(obj.isGraded);
+      ..write(obj.isGraded)
+      ..writeByte(8)
+      ..write(obj.examFirestoreId)
+      ..writeByte(9)
+      ..write(obj.studentFirestoreId)
+      ..writeByte(10)
+      ..write(obj.resultFirestoreId)
+      ..writeByte(11)
+      ..write(obj.localKey)
+      ..writeByte(12)
+      ..write(obj.schoolId)
+      ..writeByte(13)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(14)
+      ..write(obj.percentage);
   }
 
   @override

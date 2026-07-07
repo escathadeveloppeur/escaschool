@@ -532,7 +532,7 @@ class _AdminPaymentsState extends State<AdminPayments> with SingleTickerProvider
                                     Row(
                                       children: [
                                         Text(
-                                          "${(p['amount'] as double).toStringAsFixed(0)} FCFA",
+                                          "${(p['amount'] as double).toStringAsFixed(0)} USD",
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w600,
                                             color: Color(0xFF10B981),

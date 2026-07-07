@@ -35,7 +35,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isTeacher => _user?.role == 'teacher';
   bool get isStudent => _user?.role == 'student';
   bool get isParent => _user?.role == 'parent';
-bool get hasSchool => _user?.schoolId != null && _user!.schoolId!.isNotEmpty;
+  bool get hasSchool => _user?.schoolId != null && _user!.schoolId!.isNotEmpty;
   String get userRole => _user?.role ?? 'unknown';
 
   // ================= CONSTRUCTEUR =================

@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,7 +23,7 @@ import 'screens/admin/admin_professors.dart';
 import 'screens/admin/admin_schedule.dart';
 import 'screens/admin/professor_permissions.dart';
 import 'screens/admin/add_class_screen.dart';
-import 'screens/admin/manage_sections_screen.dart';  // ✅ NOUVEAU
+import 'screens/admin/manage_sections_screen.dart';
 import 'screens/staff/add_document.dart';
 import 'screens/staff/add_payment.dart';
 import 'screens/staff/add_student.dart';
@@ -66,6 +68,9 @@ import 'services/payment_service.dart';
 import 'services/document_service.dart';
 import 'models/user.dart';
 
+// ✅ GLOBAL NAVIGATOR KEY
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 // Variables globales pour l'état d'initialisation
 bool _isInitialized = false;
 String? _initError;
@@ -82,14 +87,12 @@ Future<void> _createDefaultSuperAdmin() async {
     final db = DBHelper();
     final auth = firebase_auth.FirebaseAuth.instance;
     
-    // Vérifier si un Super Admin existe déjà dans Hive
     final users = await db.getAllUsers();
     final superAdminExists = users.any((u) => u['role'] == 'super_admin');
     
     if (!superAdminExists) {
       print('⚠️ Aucun Super Admin trouvé, création du compte par défaut...');
       
-      // 1. Créer dans Firebase Auth
       try {
         await auth.createUserWithEmailAndPassword(
           email: 'superadmin@ecole.com',
@@ -104,7 +107,6 @@ Future<void> _createDefaultSuperAdmin() async {
         }
       }
       
-      // 2. Créer dans Hive local
       final userId = await db.insertUser({
         'name': 'Super Administrateur',
         'email': 'superadmin@ecole.com',
@@ -146,7 +148,6 @@ Future<void> _syncSchoolsFromFirestore() async {
     for (var doc in snapshot.docs) {
       final data = doc.data();
       
-      // Vérifier si l'école existe déjà localement
       final existingSchools = await db.getAllEtablissements();
       final exists = existingSchools.any((s) => s.firestoreId == doc.id);
       
@@ -203,15 +204,12 @@ Future<void> _runAutomaticMigration() async {
 Future<void> _setupFCMListeners() async {
   print('\n🔔 Configuration des écouteurs FCM...');
   
-  // Écouter les messages en premier plan
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('📨 Message reçu en premier plan: ${message.notification?.title}');
   });
   
-  // Écouter les messages quand l'app est en arrière-plan
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   
-  // Écouter quand l'utilisateur tape sur une notification
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
     print('🖱️ Notification tapée: ${message.notification?.title}');
     _handleNotificationTap(message.data);
@@ -272,12 +270,10 @@ void main() async {
     await _createDefaultSuperAdmin();
     await _syncSchoolsFromFirestore();
     
-    // 🔥 MIGRATION AUTOMATIQUE DES ÉTUDIANTS 🔥
     print("\n  → Migration automatique des étudiants...");
     await _runAutomaticMigration();
     print("  ✓ Migration des étudiants vérifiée");
     
-    // 🔥 Démarrer les écouteurs de notifications
     print("\n  → Démarrage des écouteurs de notifications automatiques...");
     NotificationTrigger().startAllListeners();
     print("  ✓ Écouteurs de notifications actifs");
@@ -316,6 +312,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey, // ✅ AJOUTÉ
       title: 'EscaSchool',
       debugShowCheckedModeBanner: false,
       
@@ -340,8 +337,8 @@ class MyApp extends StatelessWidget {
         '/school_payments': (context) => const SchoolPaymentsScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/secret/admin': (context) => const AdminCreatorScreen(),
-        '/add_class': (context) => const AddClassScreen(),  // ✅ NOUVEAU
-        '/manage_sections': (context) => const ManageSectionsScreen(),  // ✅ NOUVEAU
+        '/add_class': (context) => const AddClassScreen(),
+        '/manage_sections': (context) => const ManageSectionsScreen(),
       },
       
       onGenerateRoute: (settings) {

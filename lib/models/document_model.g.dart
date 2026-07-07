@@ -26,13 +26,20 @@ class DocumentModelAdapter extends TypeAdapter<DocumentModel> {
       firestoreId: fields[6] as String?,
       fileUrl: fields[7] as String?,
       createdAt: fields[8] as DateTime?,
+      schoolFirestoreId: fields[9] as String?,
+      classId: fields[10] as String?,
+      studentId: fields[11] as String?,
+      documentFirestoreId: fields[12] as String?,
+      validatedBy: fields[13] as String?,
+      validatedAt: fields[14] as DateTime?,
+      localKey: fields[15] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, DocumentModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.fullName)
       ..writeByte(1)
@@ -50,7 +57,21 @@ class DocumentModelAdapter extends TypeAdapter<DocumentModel> {
       ..writeByte(7)
       ..write(obj.fileUrl)
       ..writeByte(8)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(9)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(10)
+      ..write(obj.classId)
+      ..writeByte(11)
+      ..write(obj.studentId)
+      ..writeByte(12)
+      ..write(obj.documentFirestoreId)
+      ..writeByte(13)
+      ..write(obj.validatedBy)
+      ..writeByte(14)
+      ..write(obj.validatedAt)
+      ..writeByte(15)
+      ..write(obj.localKey);
   }
 
   @override

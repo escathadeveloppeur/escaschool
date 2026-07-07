@@ -113,7 +113,7 @@ class _SchoolPaymentsScreenState extends State<SchoolPaymentsScreen> with Single
         return {
           'id': doc.id,
           'amount': (data['amount'] as num?)?.toDouble() ?? 0.0,
-          'currency': data['currency'] ?? 'FCFA', // ✅ Support de la devise
+          'currency': data['currency'] ?? 'USD', // ✅ Support de la devise
           'month': data['month'] ?? '',
           'year': data['year'] ?? DateTime.now().year,
           'paymentMethod': data['paymentMethod'] ?? 'Espèces',

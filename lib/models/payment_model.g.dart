@@ -28,13 +28,20 @@ class PaymentModelAdapter extends TypeAdapter<PaymentModel> {
       schoolId: fields[8] as int,
       firestoreId: fields[9] as String?,
       status: fields[10] as String,
+      schoolFirestoreId: fields[11] as String?,
+      classId: fields[12] as String?,
+      studentId: fields[13] as String?,
+      paymentFirestoreId: fields[14] as String?,
+      localKey: fields[15] as String?,
+      paymentMethod: fields[16] as String?,
+      transactionId: fields[17] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PaymentModel obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.studentKeyHive)
       ..writeByte(1)
@@ -56,7 +63,21 @@ class PaymentModelAdapter extends TypeAdapter<PaymentModel> {
       ..writeByte(9)
       ..write(obj.firestoreId)
       ..writeByte(10)
-      ..write(obj.status);
+      ..write(obj.status)
+      ..writeByte(11)
+      ..write(obj.schoolFirestoreId)
+      ..writeByte(12)
+      ..write(obj.classId)
+      ..writeByte(13)
+      ..write(obj.studentId)
+      ..writeByte(14)
+      ..write(obj.paymentFirestoreId)
+      ..writeByte(15)
+      ..write(obj.localKey)
+      ..writeByte(16)
+      ..write(obj.paymentMethod)
+      ..writeByte(17)
+      ..write(obj.transactionId);
   }
 
   @override

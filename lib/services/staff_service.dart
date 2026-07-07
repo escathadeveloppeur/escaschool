@@ -17,9 +17,13 @@ class StaffService {
   /// Ajouter un membre du personnel
   Future<int> addStaff(StaffModel staff, String schoolId) async {
     try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('Utilisateur non connecté');
+
       // Créer une copie du staff avec le schoolId
       final staffWithSchoolId = staff.copyWith(
         schoolId: schoolId,
+        firestoreId: schoolId,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -39,7 +43,7 @@ class StaffService {
       
       return id;
     } catch (e) {
-      print('Erreur ajout personnel: $e');
+      print('❌ Erreur ajout personnel: $e');
       throw e;
     }
   }
@@ -62,12 +66,12 @@ class StaffService {
       
       // Synchronisation Firebase
       if (updatedStaff.firestoreId != null && updatedStaff.firestoreId!.isNotEmpty) {
-        await updateStaffInFirestore(updatedStaff.firestoreId!, updatedStaff);
+        await updateStaffInFirestore(schoolId, updatedStaff.firestoreId!, updatedStaff);
       } else {
         await syncStaffToFirestore(updatedStaff, schoolId);
       }
     } catch (e) {
-      print('Erreur modification personnel: $e');
+      print('❌ Erreur modification personnel: $e');
       throw e;
     }
   }
@@ -77,7 +81,7 @@ class StaffService {
     try {
       final staff = await _dbHelper.getStaffById(id);
       if (staff != null && staff.firestoreId != null && staff.firestoreId!.isNotEmpty) {
-        await deleteStaffFromFirestore(staff.firestoreId!);
+        await deleteStaffFromFirestore(schoolId, staff.firestoreId!);
       }
       
       await _dbHelper.deleteStaff(id);
@@ -91,7 +95,7 @@ class StaffService {
       
       print('✅ Personnel supprimé: $name');
     } catch (e) {
-      print('Erreur suppression personnel: $e');
+      print('❌ Erreur suppression personnel: $e');
       throw e;
     }
   }
@@ -101,7 +105,7 @@ class StaffService {
     try {
       return await _dbHelper.getStaffBySchool(schoolId);
     } catch (e) {
-      print('Erreur récupération personnel par école: $e');
+      print('❌ Erreur récupération personnel par école: $e');
       return [];
     }
   }
@@ -111,7 +115,7 @@ class StaffService {
     try {
       return await _dbHelper.getAllStaff();
     } catch (e) {
-      print('Erreur récupération tout le personnel: $e');
+      print('❌ Erreur récupération tout le personnel: $e');
       return [];
     }
   }
@@ -121,21 +125,26 @@ class StaffService {
     try {
       return await _dbHelper.getStaffById(id);
     } catch (e) {
-      print('Erreur récupération personnel par ID: $e');
+      print('❌ Erreur récupération personnel par ID: $e');
       return null;
     }
   }
 
   // ==================== SYNCHRONISATION FIREBASE ====================
 
-  /// Synchroniser un personnel vers Firestore
+  /// ✅ Synchroniser un personnel vers Firestore (sous-collection de l'école)
   Future<void> syncStaffToFirestore(StaffModel staff, String schoolId) async {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
 
-      // Générer un ID Firestore
-      final docRef = _firestore.collection('staff').doc();
+      // 🔥 Utiliser une sous-collection de l'école
+      final docRef = _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .doc();
+
       final staffData = {
         'fullName': staff.fullName,
         'position': staff.position,
@@ -146,11 +155,12 @@ class StaffService {
         'salary': staff.salary,
         'photoUrl': staff.photoUrl,
         'isActive': staff.isActive,
-        'schoolId': schoolId,
         'localId': staff.id,
+        'localKey': staff.id?.toString(),
         'createdBy': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'isSynced': true,
       };
 
       await docRef.set(staffData);
@@ -162,10 +172,15 @@ class StaffService {
     }
   }
 
-  /// Mettre à jour un personnel dans Firestore
-  Future<void> updateStaffInFirestore(String firestoreId, StaffModel staff) async {
+  /// ✅ Mettre à jour un personnel dans Firestore
+  Future<void> updateStaffInFirestore(String schoolId, String firestoreId, StaffModel staff) async {
     try {
-      await _firestore.collection('staff').doc(firestoreId).update({
+      await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .doc(firestoreId)
+          .update({
         'fullName': staff.fullName,
         'position': staff.position,
         'phone': staff.phone,
@@ -182,10 +197,15 @@ class StaffService {
     }
   }
 
-  /// Supprimer un personnel de Firestore
-  Future<void> deleteStaffFromFirestore(String firestoreId) async {
+  /// ✅ Supprimer un personnel de Firestore
+  Future<void> deleteStaffFromFirestore(String schoolId, String firestoreId) async {
     try {
-      await _firestore.collection('staff').doc(firestoreId).delete();
+      await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .doc(firestoreId)
+          .delete();
       print('🗑️ Personnel supprimé de Firestore: $firestoreId');
     } catch (e) {
       print('❌ Erreur suppression personnel Firestore: $e');
@@ -193,7 +213,7 @@ class StaffService {
     }
   }
 
-  /// Synchroniser tout le personnel local vers Firestore
+  /// ✅ Synchroniser tout le personnel local vers Firestore
   Future<void> syncAllStaffToFirestore(String schoolId) async {
     try {
       print('🔄 Synchronisation du personnel vers Firestore...');
@@ -216,7 +236,7 @@ class StaffService {
           if (staff.firestoreId == null || staff.firestoreId!.isEmpty) {
             await syncStaffToFirestore(staff, schoolId);
           } else {
-            await updateStaffInFirestore(staff.firestoreId!, staff);
+            await updateStaffInFirestore(schoolId, staff.firestoreId!, staff);
           }
           syncedCount++;
         } catch (e) {
@@ -231,7 +251,7 @@ class StaffService {
     }
   }
 
-  /// Synchroniser le personnel depuis Firestore vers local
+  /// ✅ Synchroniser le personnel depuis Firestore vers local
   Future<void> syncStaffFromFirestore(String schoolId) async {
     try {
       print('📥 Synchronisation du personnel depuis Firestore...');
@@ -242,9 +262,15 @@ class StaffService {
       }
       
       final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
           .collection('staff')
-          .where('schoolId', isEqualTo: schoolId)
           .get();
+
+      if (snapshot.docs.isEmpty) {
+        print('📭 Aucun personnel à synchroniser depuis Firestore');
+        return;
+      }
 
       int addedCount = 0;
       int updatedCount = 0;
@@ -253,7 +279,6 @@ class StaffService {
         try {
           final data = doc.data();
           
-          // Vérifier que les données nécessaires existent
           if (data['localId'] == null) {
             print('⚠️ Personnel sans localId ignoré: ${doc.id}');
             continue;
@@ -273,7 +298,7 @@ class StaffService {
             photoUrl: data['photoUrl'],
             isActive: data['isActive'] ?? true,
             schoolId: data['schoolId'] ?? schoolId,
-            firestoreId: doc.id,
+            firestoreId: schoolId,
             createdAt: data['createdAt'] != null 
                 ? (data['createdAt'] as Timestamp).toDate() 
                 : null,
@@ -304,14 +329,27 @@ class StaffService {
     }
   }
 
-  /// Supprimer tout le personnel d'une école (utile pour la réinitialisation)
+  /// ✅ Synchronisation complète (bidirectionnelle)
+  Future<void> syncAllStaffData(String schoolId) async {
+    try {
+      print('🔄 Synchronisation complète du personnel...');
+      await syncAllStaffToFirestore(schoolId);
+      await syncStaffFromFirestore(schoolId);
+      print('✅ Synchronisation complète du personnel terminée');
+    } catch (e) {
+      print('❌ Erreur synchronisation complète: $e');
+      throw e;
+    }
+  }
+
+  /// ✅ Supprimer tout le personnel d'une école
   Future<void> deleteAllStaffForSchool(String schoolId) async {
     try {
       final staffList = await getStaffBySchool(schoolId);
       
       for (var staff in staffList) {
         if (staff.firestoreId != null && staff.firestoreId!.isNotEmpty) {
-          await deleteStaffFromFirestore(staff.firestoreId!);
+          await deleteStaffFromFirestore(schoolId, staff.firestoreId!);
         }
         await _dbHelper.deleteStaff(staff.id!);
       }
@@ -323,6 +361,94 @@ class StaffService {
     }
   }
 
+  // ==================== RÉCUPÉRATION DÉTAILLÉE ====================
+
+  /// ✅ Récupérer le personnel depuis Firestore
+  Future<List<StaffModel>> getStaffFromFirestore(String schoolId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .orderBy('fullName')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return StaffModel(
+          id: data['localId'],
+          fullName: data['fullName'] ?? '',
+          position: data['position'] ?? '',
+          phone: data['phone'],
+          email: data['email'],
+          address: data['address'],
+          hireDate: data['hireDate'] != null 
+              ? DateTime.parse(data['hireDate']) 
+              : DateTime.now(),
+          salary: (data['salary'] ?? 0.0).toDouble(),
+          photoUrl: data['photoUrl'],
+          isActive: data['isActive'] ?? true,
+          schoolId: data['schoolId'] ?? schoolId,
+          firestoreId: schoolId,
+          createdAt: data['createdAt'] != null 
+              ? (data['createdAt'] as Timestamp).toDate() 
+              : null,
+          updatedAt: data['updatedAt'] != null 
+              ? (data['updatedAt'] as Timestamp).toDate() 
+              : null,
+        );
+      }).toList();
+
+    } catch (e) {
+      print('❌ Erreur récupération personnel depuis Firestore: $e');
+      return [];
+    }
+  }
+
+  /// ✅ Récupérer un personnel par Firestore ID
+  Future<StaffModel?> getStaffByFirestoreId(String schoolId, String firestoreId) async {
+    try {
+      final doc = await _firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('staff')
+          .doc(firestoreId)
+          .get();
+      
+      if (!doc.exists) return null;
+      
+      final data = doc.data()!;
+      return StaffModel(
+        id: data['localId'],
+        fullName: data['fullName'] ?? '',
+        position: data['position'] ?? '',
+        phone: data['phone'],
+        email: data['email'],
+        address: data['address'],
+        hireDate: data['hireDate'] != null 
+            ? DateTime.parse(data['hireDate']) 
+            : DateTime.now(),
+        salary: (data['salary'] ?? 0.0).toDouble(),
+        photoUrl: data['photoUrl'],
+        isActive: data['isActive'] ?? true,
+        schoolId: data['schoolId'] ?? schoolId,
+        firestoreId: schoolId,
+        createdAt: data['createdAt'] != null 
+            ? (data['createdAt'] as Timestamp).toDate() 
+            : null,
+        updatedAt: data['updatedAt'] != null 
+            ? (data['updatedAt'] as Timestamp).toDate() 
+            : null,
+      );
+
+    } catch (e) {
+      print('❌ Erreur récupération personnel par Firestore ID: $e');
+      return null;
+    }
+  }
+
+  // ==================== STATISTIQUES ====================
+
   /// Vérifier si un personnel existe déjà
   Future<bool> staffExists(String fullName, String position, String schoolId) async {
     try {
@@ -332,7 +458,7 @@ class StaffService {
         staff.position == position
       );
     } catch (e) {
-      print('Erreur vérification existence personnel: $e');
+      print('❌ Erreur vérification existence personnel: $e');
       return false;
     }
   }
@@ -343,7 +469,7 @@ class StaffService {
       final staffList = await getStaffBySchool(schoolId);
       return staffList.length;
     } catch (e) {
-      print('Erreur comptage personnel: $e');
+      print('❌ Erreur comptage personnel: $e');
       return 0;
     }
   }
@@ -354,7 +480,7 @@ class StaffService {
       final staffList = await getStaffBySchool(schoolId);
       return staffList.where((staff) => staff.isActive).length;
     } catch (e) {
-      print('Erreur comptage personnel actif: $e');
+      print('❌ Erreur comptage personnel actif: $e');
       return 0;
     }
   }
@@ -365,7 +491,7 @@ class StaffService {
       final staffList = await getStaffBySchool(schoolId);
       return staffList.where((staff) => staff.position == position).toList();
     } catch (e) {
-      print('Erreur récupération personnel par poste: $e');
+      print('❌ Erreur récupération personnel par poste: $e');
       return [];
     }
   }
@@ -380,8 +506,84 @@ class StaffService {
         (staff.phone?.contains(query) ?? false)
       ).toList();
     } catch (e) {
-      print('Erreur recherche personnel: $e');
+      print('❌ Erreur recherche personnel: $e');
       return [];
     }
+  }
+
+  /// ✅ Écouter le personnel en temps réel
+  Stream<List<StaffModel>> listenToStaff(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('staff')
+        .orderBy('fullName')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            return StaffModel(
+              id: data['localId'],
+              fullName: data['fullName'] ?? '',
+              position: data['position'] ?? '',
+              phone: data['phone'],
+              email: data['email'],
+              address: data['address'],
+              hireDate: data['hireDate'] != null 
+                  ? DateTime.parse(data['hireDate']) 
+                  : DateTime.now(),
+              salary: (data['salary'] ?? 0.0).toDouble(),
+              photoUrl: data['photoUrl'],
+              isActive: data['isActive'] ?? true,
+              schoolId: data['schoolId'] ?? schoolId,
+              firestoreId: schoolId,
+              createdAt: data['createdAt'] != null 
+                  ? (data['createdAt'] as Timestamp).toDate() 
+                  : null,
+              updatedAt: data['updatedAt'] != null 
+                  ? (data['updatedAt'] as Timestamp).toDate() 
+                  : null,
+            );
+          }).toList();
+        });
+  }
+
+  /// ✅ Écouter le personnel actif en temps réel
+  Stream<List<StaffModel>> listenToActiveStaff(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('staff')
+        .where('isActive', isEqualTo: true)
+        .orderBy('fullName')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            return StaffModel(
+              id: data['localId'],
+              fullName: data['fullName'] ?? '',
+              position: data['position'] ?? '',
+              phone: data['phone'],
+              email: data['email'],
+              address: data['address'],
+              hireDate: data['hireDate'] != null 
+                  ? DateTime.parse(data['hireDate']) 
+                  : DateTime.now(),
+              salary: (data['salary'] ?? 0.0).toDouble(),
+              photoUrl: data['photoUrl'],
+              isActive: data['isActive'] ?? true,
+              schoolId: data['schoolId'] ?? schoolId,
+              firestoreId: schoolId,
+              
+              createdAt: data['createdAt'] != null 
+                  ? (data['createdAt'] as Timestamp).toDate() 
+                  : null,
+              updatedAt: data['updatedAt'] != null 
+                  ? (data['updatedAt'] as Timestamp).toDate() 
+                  : null,
+            );
+          }).toList();
+        });
   }
 }
