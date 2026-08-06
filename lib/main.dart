@@ -8,10 +8,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
+import 'providers/nana_provider.dart';
 import 'models/university/etablissement_model.dart';
 import 'services/notification_service.dart';
 import 'services/notification_trigger.dart';
 import 'services/migration_service.dart';
+import 'services/nana_ai_service.dart';
+import 'widgets/nana_chat_bubble.dart';
 
 // Import des écrans existants
 import 'screens/login_screen.dart';
@@ -298,6 +301,10 @@ void main() async {
           print("→ Création de AuthProvider");
           return AuthProvider();
         }),
+        ChangeNotifierProvider(create: (_) {
+          print("🤖 Création de NanaProvider");
+          return NanaProvider();
+        }),
       ],
       child: const MyApp(),
     ),
@@ -306,13 +313,17 @@ void main() async {
   print("✓ runApp() exécuté\n");
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WIDGET PRINCIPAL AVEC NANA INTÉGRÉE
+// ═══════════════════════════════════════════════════════════════════════════
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navigatorKey, // ✅ AJOUTÉ
+      navigatorKey: navigatorKey,
       title: 'EscaSchool',
       debugShowCheckedModeBanner: false,
       
@@ -519,7 +530,7 @@ class MyApp extends StatelessWidget {
         }
         
         if (auth.user != null) {
-          return _getDashboardScreen(auth.user!.role, auth);
+          return _getDashboardScreen(auth.user!.role, auth, context);
         }
         
         return const LoginScreen();
@@ -527,25 +538,96 @@ class MyApp extends StatelessWidget {
     );
   }
   
-  Widget _getDashboardScreen(String role, AuthProvider auth) {
+  // ⬇️ MODIFIÉ : Ajout de Nana dans tous les dashboards
+  Widget _getDashboardScreen(String role, AuthProvider auth, BuildContext context) {
+    Widget dashboard;
+    
     switch (role) {
       case 'super_admin':
-        return const SuperAdminDashboard();
+        dashboard = const SuperAdminDashboard();
+        break;
       case 'admin':
-        return const AdminDashboard();
+        dashboard = const AdminDashboard();
+        break;
       case 'staff':
-        return const AdminStaffDashboard();
+        dashboard = const AdminStaffDashboard();
+        break;
       case 'teacher':
-        return TeacherDashboard(
+        dashboard = TeacherDashboard(
           professorFirestoreId: auth.user?.firestoreId ?? '',
           professorName: auth.user?.name ?? "Professeur",
         );
+        break;
       case 'parent':
-        return const ParentDashboard();
+        dashboard = const ParentDashboard();
+        break;
       case 'student':
-        return const StudentDashboard();
+        dashboard = const StudentDashboard();
+        break;
       default:
         return const LoginScreen();
     }
+    
+    // ✅ CORRECTION : Encapsuler avec Nana sans Scaffold imbriqué
+    return _buildWithNana(
+      child: dashboard,
+      role: role,
+      userId: auth.user?.id?.toString() ?? '',
+      userName: auth.user?.name ?? 'Utilisateur',
+      schoolId: auth.user?.schoolId?.toString(),
+    );
+  }
+
+  // ✅ CORRIGÉ : Widget qui ajoute Nana sans Scaffold imbriqué
+  Widget _buildWithNana({
+    required Widget child,
+    required String role,
+    required String userId,
+    required String userName,
+    String? schoolId,
+  }) {
+    return Consumer<NanaProvider>(
+      builder: (context, nanaProvider, _) {
+        // Initialiser Nana si ce n'est pas déjà fait
+        if (userId.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (nanaProvider.messages.isEmpty) {
+              nanaProvider.initialize(
+                role: role,
+                userId: userId,
+                userName: userName,
+                schoolId: schoolId,
+              );
+            }
+          });
+        }
+        
+        // ✅ SOLUTION : Utiliser un SizedBox avec contraintes explicites
+        return SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: Stack(
+            children: [
+              // Le dashboard original
+              Positioned.fill(
+                child: child,
+              ),
+              
+              // Bulle flottante de Nana
+              if (userId.isNotEmpty)
+                Positioned(
+                  bottom: 20,
+                  right: 20,
+                  child: NanaChatBubble(
+                    role: role,
+                    userId: userId,
+                    userName: userName,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

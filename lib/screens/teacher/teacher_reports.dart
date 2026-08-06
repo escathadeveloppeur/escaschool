@@ -39,7 +39,7 @@ class TeacherReportsScreen extends StatefulWidget {
 class _TeacherReportsScreenState extends State<TeacherReportsScreen> with SingleTickerProviderStateMixin {
   String selectedClass = '';
   String selectedSubject = '';
-  String reportType = 'grades';
+  String reportType = 'bulletin';
   DateTimeRange? dateRange;
   
   List<Map<String, dynamic>> students = [];
@@ -52,21 +52,20 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
   Map<String, List<Map<String, dynamic>>> studentExamResults = {};
   Map<String, Map<String, dynamic>> studentReports = {};
   
-  Map<String, List<Map<String, dynamic>>> _subjectsFromClasses = {};
+  final Map<String, List<Map<String, dynamic>>> _subjectsFromClasses = {};
   List<String> _currentSubjectsForClass = [];
   
-  // Map des max par période pour chaque matière
-  Map<String, Map<String, int>> _subjectPeriodMaxMap = {};
+  final Map<String, Map<String, int>> _subjectPeriodMaxMap = {};
   
   bool _isLoading = true;
   bool _isGenerating = false;
   late AnimationController _animationController;
 
   final List<Map<String, dynamic>> _reportOptions = [
-    {'value': 'grades', 'label': '📝 Rapport détaillé des notes', 'icon': Icons.assignment, 'color': const Color(0xFF10B981)},
-    {'value': 'bulletin', 'label': '📊 Bulletin officiel RDC', 'icon': Icons.school, 'color': const Color(0xFF3B82F6)},
-    {'value': 'exam', 'label': '💻 Examens en ligne', 'icon': Icons.quiz, 'color': const Color(0xFFF59E0B)},
-    {'value': 'attendance', 'label': '📅 Présences', 'icon': Icons.calendar_month, 'color': const Color(0xFF8B5CF6)},
+    {'value': 'grades', 'label': 'Rapport détaillé des notes', 'icon': Icons.assignment, 'color': const Color(0xFF10B981)},
+    {'value': 'bulletin', 'label': 'Bulletin officiel RDC', 'icon': Icons.school, 'color': const Color(0xFF3B82F6)},
+    {'value': 'exam', 'label': 'Examens en ligne', 'icon': Icons.quiz, 'color': const Color(0xFFF59E0B)},
+    {'value': 'attendance', 'label': 'Présences', 'icon': Icons.calendar_month, 'color': const Color(0xFF8B5CF6)},
   ];
 
   @override
@@ -122,12 +121,10 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     }
   }
   
-  /// Charge la configuration des max par période pour chaque matière
   Future<void> _loadSubjectPeriodMaxMap() async {
     _subjectPeriodMaxMap.clear();
     
     try {
-      // Récupérer la classe sélectionnée
       final classQuery = await FirebaseFirestore.instance
           .collection('classes')
           .where('className', isEqualTo: selectedClass)
@@ -153,7 +150,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
               'ex2': (maxValues['ex2'] as num?)?.toInt() ?? 40,
             };
           } else {
-            // Valeurs par défaut si non définies
             _subjectPeriodMaxMap[subjectName] = {
               'p1': 20, 'p2': 20, 'ex1': 40,
               'p3': 20, 'p4': 20, 'ex2': 40,
@@ -169,7 +165,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     }
   }
   
-  /// Obtient le max de période pour une note
   int _getPeriodMaxForGrade(Map<String, dynamic> grade) {
     final subject = grade['subject'] as String;
     final evaluationType = grade['evaluationType'] as String;
@@ -177,7 +172,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     final semester = date.month <= 6 ? 1 : 2;
     
     final periodMaxMap = _subjectPeriodMaxMap[subject];
-    if (periodMaxMap == null) return 20; // Valeur par défaut
+    if (periodMaxMap == null) return 20;
     
     switch (evaluationType) {
       case 'Devoir 1':
@@ -191,7 +186,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     }
   }
   
-  /// Obtenir le libellé de la période
   String _getPeriodLabel(String evaluationType, DateTime date) {
     final semester = date.month <= 6 ? 1 : 2;
     
@@ -210,9 +204,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
   Future<void> _loadHomeroomData() async {
     print('\n🏫 CHARGEMENT RAPPORTS - PROFESSEUR TITULAIRE');
     print('   Classe: ${widget.homeroomClassName}');
-    
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final schoolId = auth.currentSchoolId;
     
     selectedClass = widget.homeroomClassName!;
     
@@ -240,7 +231,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     students = [];
     for (var doc in studentsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       students.add({
         'firestoreId': doc.id,
         'fullName': data['fullName'] ?? 'Sans nom',
@@ -257,7 +248,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     allGrades = [];
     for (var doc in gradesSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       allGrades.add({
         'id': doc.id,
         'studentFirestoreId': data['studentFirestoreId'] ?? '',
@@ -280,7 +271,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     onlineExams = [];
     for (var doc in examsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       onlineExams.add({
         'id': doc.id,
         'title': data['title'] ?? '',
@@ -296,7 +287,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     examResults = [];
     for (var doc in resultsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       examResults.add({
         'id': doc.id,
         'examId': data['examId'] ?? '',
@@ -314,7 +305,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     attendances = [];
     for (var doc in attendancesSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       attendances.add({
         'id': doc.id,
         'studentName': data['studentName'] ?? '',
@@ -323,11 +314,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
         'date': data['date'] != null ? (data['date'] as Timestamp).toDate() : DateTime.now(),
       });
     }
-    
-    print('   📚 Étudiants: ${students.length}');
-    print('   📝 Notes: ${allGrades.length}');
-    print('   💻 Examens: ${onlineExams.length}');
-    print('   📅 Présences: ${attendances.length}');
   }
 
   Future<void> _loadNormalData() async {
@@ -340,7 +326,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     _subjectsFromClasses.clear();
     for (var doc in classesSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final className = data['className'] ?? '';
       final subjects = data['subjects'] as List<dynamic>? ?? [];
       
@@ -399,7 +385,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     allGrades = [];
     for (var doc in gradesSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final className = data['className'] ?? '';
       final subject = data['subject'] ?? '';
       
@@ -431,7 +417,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     onlineExams = [];
     for (var doc in examsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final className = data['className'] ?? '';
       if (widget.assignedClasses.contains(className)) {
         onlineExams.add({
@@ -450,7 +436,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     examResults = [];
     for (var doc in resultsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       examResults.add({
         'id': doc.id,
         'examId': data['examId'] ?? '',
@@ -467,7 +453,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     
     attendances = [];
     for (var doc in attendancesSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final className = data['className'] ?? '';
       if (widget.assignedClasses.contains(className)) {
         attendances.add({
@@ -486,7 +472,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
         ? allGrades
         : allGrades.where((g) => g['subject'] == selectedSubject).toList();
     
-    // Ajouter periodMax à chaque note
     for (var grade in filteredGrades) {
       grade['periodMax'] = _getPeriodMaxForGrade(grade);
       grade['periodLabel'] = _getPeriodLabel(grade['evaluationType'], grade['date']);
@@ -572,7 +557,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     }
   }
 
-  /// Calcule la moyenne pondérée avec répartition proportionnelle par période
   Map<String, dynamic> _calculateStudentWeightedAverage(List<Map<String, dynamic>> grades) {
     if (grades.isEmpty) {
       return {
@@ -582,7 +566,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
       };
     }
     
-    // Grouper les notes par période
     final Map<String, List<Map<String, dynamic>>> notesByPeriod = {};
     
     for (var grade in grades) {
@@ -598,18 +581,14 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     double totalObtained = 0;
     double totalMaxPoints = 0;
     
-    // Calculer pour chaque période
     for (var periodNotes in notesByPeriod.values) {
-      // Récupérer le periodMax (barème officiel de la période)
       final periodMax = (periodNotes.first['periodMax'] as int?)?.toDouble() ?? 20.0;
       
-      // Calculer la somme pondérée des max individuels de la période
       double totalWeightedMax = 0;
       for (var note in periodNotes) {
         totalWeightedMax += (note['maxScore'] as double) * (note['coefficient'] as double);
       }
       
-      // Facteur de conversion pour ramener au periodMax
       final conversionFactor = totalWeightedMax > 0 ? periodMax / totalWeightedMax : 0;
       
       double periodObtained = 0;
@@ -620,10 +599,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
         final maxScore = note['maxScore'] as double;
         final coefficient = note['coefficient'] as double;
         
-        // Part de cette évaluation dans le periodMax
         final partPeriodMax = maxScore * coefficient * conversionFactor;
-        
-        // Points obtenus sur cette part
         final pointsObtained = (score / maxScore) * partPeriodMax;
         
         periodObtained += pointsObtained;
@@ -674,7 +650,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
       (selectedSubject.isEmpty || g['subject'] == selectedSubject)
     ).toList();
     
-    // Ajouter periodMax et periodLabel à chaque note pour le PDF
     for (var grade in classFilteredGrades) {
       grade['periodMax'] = _getPeriodMaxForGrade(grade);
       grade['periodLabel'] = _getPeriodLabel(grade['evaluationType'], grade['date']);
@@ -761,7 +736,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
   pw.Widget _buildStatCard(String label, String value, PdfColor color) {
     return pw.Container(
       width: 100,
-      padding: pw.EdgeInsets.all(10),
+      padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey100,
         borderRadius: pw.BorderRadius.circular(8),
@@ -785,7 +760,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
   ) {
     return pw.Table(
       border: pw.TableBorder.all(),
-      columnWidths: {
+      columnWidths: const {
         0: pw.FlexColumnWidth(2),
         1: pw.FixedColumnWidth(90),
         2: pw.FixedColumnWidth(70),
@@ -794,7 +769,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
       },
       children: [
         pw.TableRow(
-          decoration: pw.BoxDecoration(color: PdfColors.grey300),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           children: [
             _pdfHeaderCell('Eleve'),
             _pdfHeaderCell('Total Devoirs'),
@@ -821,9 +796,9 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
           }
           final examAverage = exams.isNotEmpty ? examTotal / exams.length : 0;
           
-          final attendances = studentAttendancesMap[studentName] ?? [];
-          final presents = attendances.where((a) => a['status'] == 'present').length;
-          final totalAttendance = attendances.length;
+          final studentAtt = studentAttendancesMap[studentName] ?? [];
+          final presents = studentAtt.where((a) => a['status'] == 'present').length;
+          final totalAttendance = studentAtt.length;
           final attendanceRate = totalAttendance > 0 ? (presents / totalAttendance * 100) : 0;
           
           final percentage = weightedAvg['percentage'];
@@ -841,7 +816,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
                 textStyle: pw.TextStyle(color: avgColor, fontWeight: pw.FontWeight.bold)),
             ],
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -854,6 +829,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     return "Insuffisant";
   }
 
+  /// ✅ GÉNÉRATION DES BULLETINS
   Future<void> _generateClassBulletinPDF() async {
     if (selectedClass.isEmpty) {
       _showSnackBar('Veuillez sélectionner une classe', Colors.orange);
@@ -888,20 +864,29 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
         }
       }
       
-      await BulletinPdfGenerator.generateAllBulletins(
-        studentReports: reportsList,
-        className: selectedClass,
-        teacherName: widget.teacherName,
-        allGrades: allGrades,
-        examResults: examResults,
-        attendances: attendances,
-        schoolInfo: schoolInfo,
-        classSubjects: classSubjects,
-      );
+      // ✅ Générer chaque bulletin
+      for (final report in reportsList) {
+        final studentId = report['studentId'] as String;
+        report['grades'] = studentGrades[studentId] ?? [];
+        report['student'] = report['student'];
+        report['ranking'] = report['ranking'];
+        
+        await BulletinPdfGenerator.generateBulletin(
+          studentData: report,
+          className: selectedClass,
+          teacherName: widget.teacherName,
+          allGrades: allGrades,
+          examResults: examResults,
+          attendances: attendances,
+          classSubjects: classSubjects,
+          schoolInfo: schoolInfo,
+          totalStudents: reportsList.length,
+        );
+      }
       
-      _showSnackBar('${studentReports.length} bulletins générés avec succès', Colors.green);
+      _showSnackBar('✅ ${reportsList.length} bulletin(s) généré(s) avec succès', Colors.green);
     } catch (e) {
-      _showSnackBar('Erreur: $e', Colors.red);
+      _showSnackBar('❌ Erreur: $e', Colors.red);
     } finally {
       setState(() => _isGenerating = false);
     }
@@ -1109,15 +1094,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     return info;
   }
 
-  Future<Map<String, String>> _getStudentInfo() async {
-    return {
-      'birthPlace': '',
-      'birthDate': '',
-      'permNumber': '',
-      'matricule': '',
-    };
-  }
-
   pw.Widget _pdfHeaderCell(String text) {
     return pw.Padding(
       padding: pw.EdgeInsets.all(8),
@@ -1143,43 +1119,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     );
   }
   
-  double _calculateClassAverage(String type) {
-    if (studentReports.isEmpty) return 0;
-    double total = 0;
-    for (var data in studentReports.values) {
-      total += data[type] as double;
-    }
-    return total / studentReports.length;
-  }
-  
-  double _getBestAverage() {
-    if (studentReports.isEmpty) return 0;
-    double best = 0;
-    for (var data in studentReports.values) {
-      final avg = data['overallAverage'] as double;
-      if (avg > best) best = avg;
-    }
-    return best;
-  }
-  
-  double _calculateSuccessRate() {
-    if (studentReports.isEmpty) return 0;
-    int success = 0;
-    for (var data in studentReports.values) {
-      if ((data['percentage'] as double) >= 50) success++;
-    }
-    return (success / studentReports.length) * 100;
-  }
-  
   String _formatDateRange() => dateRange == null ? '' : '${DateFormat('dd/MM/yyyy').format(dateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(dateRange!.end)}';
-  
-  String _getAppreciation(double avg) {
-    if (avg >= 16) return 'Excellent';
-    if (avg >= 14) return 'Très bien';
-    if (avg >= 12) return 'Bien';
-    if (avg >= 10) return 'Passable';
-    return 'Insuffisant';
-  }
   
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1192,10 +1132,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-    final classFilteredStudents = students.where((s) => selectedClass.isEmpty || s['className'] == selectedClass).toList();
-    final selectedReportOption = _reportOptions.firstWhere((opt) => opt['value'] == reportType);
-    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -1226,104 +1162,24 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (auth.currentSchoolId != null && !auth.isSuperAdmin)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.withOpacity(0.1), Colors.blue.withOpacity(0.05)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.business, size: 16, color: Colors.blue),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Ecole : ${auth.schoolName ?? auth.currentSchoolId}',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.blue),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  
+                  // Sélecteur de Classe
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5)),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Colors.blue.shade50, Colors.white],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.blue, Colors.blue.shade700],
-                                    ),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(Icons.filter_alt, color: Colors.white, size: 20),
-                                ),
-                                const SizedBox(width: 14),
-                                const Text('Filtres', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '${classFilteredStudents.length} eleves',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              children: [
-                                _buildClassDropdown(),
-                                const SizedBox(height: 16),
-                                _buildSubjectDropdown(),
-                                const SizedBox(height: 16),
-                                _buildReportTypeDropdown(selectedReportOption),
-                                const SizedBox(height: 16),
-                                _buildDateRangePicker(),
-                                const SizedBox(height: 20),
-                                _buildGenerateButton(),
-                              ],
-                            ),
-                          ),
+                          _buildClassDropdown(),
+                          const SizedBox(height: 16),
+                          _buildSubjectDropdown(),
+                          const SizedBox(height: 16),
+                          _buildReportTypeDropdown(),
+                          const SizedBox(height: 16),
+                          _buildGenerateButton(),
                         ],
                       ),
                     ),
@@ -1331,170 +1187,48 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
                   
                   const SizedBox(height: 20),
                   
-                  if (studentReports.isNotEmpty && reportType == 'grades')
-                    FadeTransition(
-                      opacity: _animationController,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.purple.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: const Icon(Icons.table_chart, color: Colors.purple, size: 20),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  const Text('Aperçu des notes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${allGrades.where((g) => g['className'] == selectedClass).length} notes',
-                                      style: TextStyle(fontSize: 12, color: Colors.green[700]),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  columnSpacing: 20,
-                                  dividerThickness: 1,
-                                  columns: const [
-                                    DataColumn(label: Text('Eleve', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Note', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Max', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Coef', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Sur 20', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
-                                  ],
-                                  rows: _buildGradePreviewRows(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  
-                  if (studentReports.isNotEmpty && reportType != 'grades')
-                    FadeTransition(
-                      opacity: _animationController,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.purple.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: const Icon(Icons.analytics, color: Colors.purple, size: 20),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  const Text('Aperçu des resultats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  columnSpacing: 20,
-                                  dividerThickness: 1,
-                                  columns: const [
-                                    DataColumn(label: Text('Eleve', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Total Devoirs', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Examens', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Moyenne', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Rang', style: TextStyle(fontWeight: FontWeight.bold))),
-                                  ],
-                                  rows: studentReports.entries.map((entry) {
-                                    final data = entry.value;
-                                    final totalObtained = data['totalObtained'] ?? 0;
-                                    final totalMaxPoints = data['totalMaxPoints'] ?? 80;
-                                    final percentage = data['percentage'] ?? 0;
-                                    final avgColor = percentage >= 50 ? Colors.green : Colors.red;
-                                    
-                                    return DataRow(cells: [
-                                      DataCell(Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w500))),
-                                      DataCell(Text('${totalObtained.toStringAsFixed(1)}/${totalMaxPoints.toStringAsFixed(0)}')),
-                                      DataCell(Text((data['examAverage'] as double).toStringAsFixed(2))),
-                                      DataCell(Text('${percentage.toStringAsFixed(1)}%', 
-                                        style: TextStyle(color: avgColor, fontWeight: FontWeight.bold))),
-                                      DataCell(Text(data['ranking'].toString())),
-                                    ]);
-                                  }).toList(),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Builder(
-                                builder: (context) {
-                                  final allGradesForClass = allGrades.where((g) => g['className'] == selectedClass).toList();
-                                  final globalResult = _calculateStudentWeightedAverage(allGradesForClass);
-                                  final totalObtained = globalResult['totalObtained'];
-                                  final totalMaxPoints = globalResult['totalMaxPoints'];
-                                  final percentage = globalResult['percentage'];
-                                  final bestStudent = _getBestStudentName();
-                                  
-                                  return Wrap(
-                                    spacing: 12,
-                                    runSpacing: 12,
-                                    alignment: WrapAlignment.center,
-                                    children: [
-                                      _statCard("Total General", "${totalObtained.toStringAsFixed(0)}/${totalMaxPoints.toStringAsFixed(0)}", Colors.blue),
-                                      _statCard("Pourcentage", "${percentage.toStringAsFixed(1)}%", Colors.green),
-                                      _statCard("Taux Reussite", "${_calculateSuccessRate().toStringAsFixed(1)}%", Colors.purple),
-                                      _statCard("Meilleur Eleve", bestStudent, Colors.orange),
-                                      _statCard("Effectif", classFilteredStudents.length.toString(), Colors.indigo),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  
-                  if (selectedClass.isNotEmpty && classFilteredStudents.isEmpty && !_isLoading)
+                  // Stats de la classe
+                  if (selectedClass.isNotEmpty && !_isLoading)
                     Container(
-                      padding: const EdgeInsets.all(40),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                      child: Column(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2)),
+                      ),
+                      child: Row(
                         children: [
-                          Icon(Icons.people_outline, size: 64, color: Colors.grey[300]),
-                          const SizedBox(height: 16),
-                          Text('Aucun eleve dans cette classe', style: TextStyle(fontSize: 16, color: Colors.grey[500])),
-                          const SizedBox(height: 8),
-                          Text('Selectionnez une autre classe', style: TextStyle(fontSize: 13, color: Colors.grey[400])),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3B82F6).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.people, color: Color(0xFF3B82F6), size: 24),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Classe : $selectedClass',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1C2B45),
+                                  ),
+                                ),
+                                Text(
+                                  '👨‍🎓 ${studentReports.length} élève(s) • ${allGrades.where((g) => g['className'] == selectedClass).length} note(s)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1502,61 +1236,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
               ),
             ),
     );
-  }
-  
-  List<DataRow> _buildGradePreviewRows() {
-    final previewGrades = allGrades.where((g) => 
-      g['className'] == selectedClass &&
-      (selectedSubject.isEmpty || g['subject'] == selectedSubject)
-    ).take(8).toList();
-    
-    if (previewGrades.isEmpty) {
-      return [
-        const DataRow(cells: [
-          DataCell(Text('Aucune note disponible', style: TextStyle(color: Colors.grey))),
-          DataCell(Text('')),
-          DataCell(Text('')),
-          DataCell(Text('')),
-          DataCell(Text('')),
-          DataCell(Text('')),
-          DataCell(Text('')),
-        ])
-      ];
-    }
-    
-    return previewGrades.map((grade) {
-      final score = grade['score'] as double;
-      final maxScore = grade['maxScore'] as double;
-      final periodMax = (grade['periodMax'] as int?)?.toDouble() ?? 20.0;
-      final normalizedScore = (score / maxScore) * periodMax;
-      final avgColor = normalizedScore >= (periodMax / 2) ? Colors.green : Colors.red;
-      final date = grade['date'] as DateTime;
-      
-      return DataRow(cells: [
-        DataCell(Text(grade['studentName'], style: const TextStyle(fontWeight: FontWeight.w500))),
-        DataCell(Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(grade['evaluationType'] ?? 'Devoir', style: TextStyle(fontSize: 11, color: Colors.blue[700])),
-        )),
-        DataCell(Text(score.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.w500))),
-        DataCell(Text(maxScore.toStringAsFixed(0), style: TextStyle(color: Colors.grey[600]))),
-        DataCell(Text(grade['coefficient'].toString(), style: TextStyle(color: Colors.grey[600]))),
-        DataCell(Text('${normalizedScore.toStringAsFixed(2)}/${periodMax.toStringAsFixed(0)}', 
-          style: TextStyle(color: avgColor, fontWeight: FontWeight.bold))),
-        DataCell(Text(DateFormat('dd/MM/yyyy').format(date), style: TextStyle(fontSize: 11, color: Colors.grey[500]))),
-      ]);
-    }).toList();
-  }
-  
-  String _getBestStudentName() {
-    if (studentReports.isEmpty) return 'Aucun';
-    final best = studentReports.entries.reduce((a, b) => 
-      (a.value['percentage'] as double) > (b.value['percentage'] as double) ? a : b);
-    return best.key;
   }
   
   Widget _buildClassDropdown() {
@@ -1572,7 +1251,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
       ),
       child: DropdownButtonFormField<String>(
         value: selectedClass.isNotEmpty ? selectedClass : null,
-        hint: const Text('Selectionner une classe'),
+        hint: const Text('Sélectionner une classe'),
         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF10B981)),
         items: availableClasses.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
         onChanged: (value) => setState(() { 
@@ -1601,10 +1280,10 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
       ),
       child: DropdownButtonFormField<String>(
         value: selectedSubject.isNotEmpty && availableSubjects.contains(selectedSubject) ? selectedSubject : null,
-        hint: const Text('Toutes les matieres'),
+        hint: const Text('Toutes les matières'),
         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
         items: [
-          const DropdownMenuItem(value: '', child: Text('Toutes les matieres')),
+          const DropdownMenuItem(value: '', child: Text('Toutes les matières')),
           ...availableSubjects.map((s) => DropdownMenuItem(value: s, child: Text(s))),
         ],
         onChanged: (value) => setState(() { 
@@ -1620,7 +1299,9 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     );
   }
   
-  Widget _buildReportTypeDropdown(Map<String, dynamic> selectedOption) {
+  Widget _buildReportTypeDropdown() {
+    final selectedOption = _reportOptions.firstWhere((opt) => opt['value'] == reportType);
+    
     return Container(
       decoration: BoxDecoration(
         color: (selectedOption['color'] as Color).withOpacity(0.05),
@@ -1650,52 +1331,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
     );
   }
   
-  Widget _buildDateRangePicker() {
-    return InkWell(
-      onTap: () async {
-        final picked = await showDateRangePicker(
-          context: context, 
-          firstDate: DateTime(2023), 
-          lastDate: DateTime(2026), 
-          initialDateRange: dateRange,
-          builder: (context, child) => Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(primary: Color(0xFF10B981)),
-            ),
-            child: child!,
-          ),
-        );
-        if (picked != null) {
-          setState(() => dateRange = picked);
-          _organizeData();
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[50],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: const Icon(Icons.calendar_today, color: Color(0xFF3B82F6), size: 20),
-            ),
-            Expanded(
-              child: Text(
-                _formatDateRange(),
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-            const Icon(Icons.arrow_drop_down, color: Colors.grey),
-            const SizedBox(width: 16),
-          ],
-        ),
-      ),
-    );
-  }
-  
   Widget _buildGenerateButton() {
     final selectedOption = _reportOptions.firstWhere((opt) => opt['value'] == reportType);
     
@@ -1706,7 +1341,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
         icon: _isGenerating 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
             : const Icon(Icons.picture_as_pdf, color: Colors.white),
-        label: Text(_isGenerating ? 'Generation en cours...' : 'Generer le rapport PDF'),
+        label: Text(_isGenerating ? 'Génération en cours...' : 'Générer le rapport PDF'),
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16),
           backgroundColor: selectedOption['color'],
@@ -1714,28 +1349,6 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> with Single
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 0,
         ),
-      ),
-    );
-  }
-  
-  Widget _statCard(String title, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-        ],
       ),
     );
   }
